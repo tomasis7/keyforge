@@ -9,6 +9,17 @@ html {
   background: var(--bg-0);
 }
 
+::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 body {
   background: var(--bg-0);
   color: var(--text-1);
@@ -109,7 +120,13 @@ body {
   font-size: var(--fs-display);
   line-height: var(--lh-tight);
   font-weight: 700;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
   margin-top: var(--space-4);
+}
+
+.accent-dot {
+  color: var(--accent);
 }
 
 .word {
@@ -136,10 +153,17 @@ body {
 
 .hero-board {
   margin-top: var(--space-12);
+  perspective: 1200px;
+  background: radial-gradient(
+    ellipse 70% 60% at 50% 40%,
+    color-mix(in srgb, var(--bg-2) 60%, transparent),
+    transparent 70%
+  );
 }
 
 .hero-board .board {
   max-width: calc(var(--container) * 0.67);
+  transform: rotateX(16deg);
 }
 
 /* --- Configurator --- */
@@ -162,7 +186,7 @@ body {
 }
 
 .configurator-viewer {
-  background: var(--bg-1);
+  background: radial-gradient(ellipse at 50% 20%, var(--bg-2), var(--bg-1) 75%);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: var(--space-8);
@@ -180,6 +204,7 @@ body {
   height: auto;
   max-width: 720px;
   margin-inline: auto;
+  filter: drop-shadow(var(--shadow-2));
 }
 
 /* --- Options panel --- */
@@ -369,7 +394,9 @@ body {
   bottom: 0;
   z-index: 10;
   margin-top: var(--space-12);
-  background: var(--bg-2);
+  background: color-mix(in srgb, var(--bg-2) 85%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--line-strong);
   box-shadow: var(--shadow-2);
 }
@@ -412,6 +439,8 @@ body {
   justify-content: center;
   padding: var(--gutter);
   background: color-mix(in srgb, var(--bg-0) 60%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .modal {
@@ -544,14 +573,31 @@ body {
   padding: var(--space-8);
 }
 
-.switch-sound,
-.switch-force {
+.switch-sound {
   font-family: var(--font-mono);
   font-size: var(--fs-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-2);
   margin-top: var(--space-3);
+}
+
+.switch-force {
+  font-family: var(--font-mono);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-tight);
+  font-weight: 500;
+  color: var(--text-1);
+  margin-top: var(--space-6);
+}
+
+.switch-force-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-top: var(--space-1);
 }
 
 /* --- Specs table --- */
@@ -611,9 +657,13 @@ body {
 }
 
 .footer-big {
-  font-size: var(--fs-h2);
+  font-size: var(--fs-display);
   line-height: var(--lh-tight);
   font-weight: 600;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+  max-width: 18ch;
+  margin-inline: auto;
 }
 
 .footer-sub {

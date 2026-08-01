@@ -13,8 +13,9 @@ export function SwitchFeel() {
               <p className="material-label">{sw.type}</p>
               <h3 className="switch-name">{sw.name}</h3>
               <p className="switch-desc">{sw.desc}.</p>
+              <p className="switch-force">{sw.force}</p>
+              <p className="switch-force-label">Actuation force</p>
               <p className="switch-sound">Sound — {sw.sound}</p>
-              <p className="switch-force">Actuation — {sw.force}</p>
             </article>
           ))}
         </div>

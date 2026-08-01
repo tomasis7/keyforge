@@ -16,7 +16,9 @@ const LABEL_KEY: Record<Zone, 'onAlpha' | 'onMod' | 'onAccent'> = {
 let pendingFlip: Flip.FlipState | null = null;
 
 export function captureLayoutFlip(): void {
-  pendingFlip = Flip.getState('.key');
+  // Scoped to the viewer: the hero board lives under a 3D transform
+  // (rotateX), which breaks Flip's absolute-position measurements.
+  pendingFlip = Flip.getState('.configurator-viewer .key');
 }
 
 export function consumeLayoutFlip(): Flip.FlipState | null {

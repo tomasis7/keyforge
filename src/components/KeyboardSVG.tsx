@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import type { LayoutId } from '../data/layouts';
 import type { CaseOption, ColorwayOption } from '../data/options';
 import { buildBoard, KEY_R, TOP_R } from '../lib/keyboard';
@@ -11,6 +11,7 @@ interface Props {
 
 export function KeyboardSVG({ layout, caseOption, colorway }: Props) {
   const board = useMemo(() => buildBoard(layout), [layout]);
+  const sheenId = `sheen-${useId().replace(/:/g, '')}`;
 
   const labelColor = (zone: 'alpha' | 'mod' | 'accent') =>
     zone === 'alpha' ? colorway.onAlpha : zone === 'mod' ? colorway.onMod : colorway.onAccent;
@@ -26,6 +27,12 @@ export function KeyboardSVG({ layout, caseOption, colorway }: Props) {
       role="img"
       aria-label={`${board.name} keyboard, ${caseOption.name.toLowerCase()} case, ${colorway.name.toLowerCase()} keycaps`}
     >
+      <defs>
+        <linearGradient id={sheenId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="white" stopOpacity="0.08" />
+          <stop offset="0.45" stopColor="white" stopOpacity="0" />
+        </linearGradient>
+      </defs>
       <rect
         className="board-case"
         x={0}
@@ -57,6 +64,16 @@ export function KeyboardSVG({ layout, caseOption, colorway }: Props) {
               height={key.th}
               rx={TOP_R}
               style={{ fill }}
+            />
+            <rect
+              className="key-sheen"
+              x={key.tx}
+              y={key.ty}
+              width={key.tw}
+              height={key.th}
+              rx={TOP_R}
+              fill={`url(#${sheenId})`}
+              pointerEvents="none"
             />
             {key.label !== '' && (
               <text

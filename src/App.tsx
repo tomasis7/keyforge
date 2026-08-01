@@ -43,7 +43,9 @@ export default function App() {
               <span className="word-inner">your</span>
             </span>{' '}
             <span className="word">
-              <span className="word-inner">endgame.</span>
+              <span className="word-inner">
+                endgame<span className="accent-dot">.</span>
+              </span>
             </span>
           </h1>
           <p className="hero-sub">
