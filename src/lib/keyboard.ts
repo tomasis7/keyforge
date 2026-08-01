@@ -69,9 +69,13 @@ export function buildBoard(layoutId: LayoutId): Board {
   const widthU = Math.max(...rowsU);
 
   const keys: KeyRect[] = [];
+  // Key identity is semantic (label + occurrence), not positional. React
+  // reconciles on keyId, so a key that exists in both layouts keeps its DOM
+  // node and Flip animates it travelling to its new home — the board reads as
+  // reconfiguring rather than as a grid resizing under static contents.
+  const seen = new Map<string, number>();
   layout.rows.forEach((row, rowIndex) => {
     let x = CASE_PAD;
-    let index = 0;
     for (const item of row) {
       if (item.t === 'gap') {
         x += item.w * KEY_U;
@@ -80,8 +84,10 @@ export function buildBoard(layoutId: LayoutId): Board {
       const w = (item.w ?? 1) * KEY_U;
       const y = CASE_PAD + rowIndex * KEY_U;
       const zone = zoneOf(item.l);
+      const occurrence = seen.get(item.l) ?? 0;
+      seen.set(item.l, occurrence + 1);
       keys.push({
-        keyId: `r${rowIndex}k${index}`,
+        keyId: `${item.l}-${occurrence}`,
         label: item.l === 'space' ? '' : displayLabel(item.l),
         zone,
         bx: x + KEY_PAD,
@@ -94,7 +100,6 @@ export function buildBoard(layoutId: LayoutId): Board {
         th: KEY_U - (KEY_PAD + 3) - (KEY_PAD + 10),
       });
       x += w;
-      index++;
     }
   });
 

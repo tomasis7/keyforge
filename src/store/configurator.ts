@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { LAYOUTS } from '../data/layouts';
 import {
   CABLE_OPTIONS,
@@ -42,18 +44,25 @@ export const useConfigurator = create<ConfigStore>()((set) => ({
 
 useConfigurator.subscribe((state) => syncUrl(state));
 
+// useShallow keeps the identity of the returned object stable while the config
+// fields are unchanged. Without it every store write produces a new object,
+// which under zustand 4 costs a needless render and under zustand 5 — where the
+// selector runs inside useSyncExternalStore directly — is a render loop.
 export function useConfig(): Config {
-  return useConfigurator((state) => ({
-    layout: state.layout,
-    case: state.case,
-    colorway: state.colorway,
-    switches: state.switches,
-    plate: state.plate,
-    cable: state.cable,
-    wrist: state.wrist,
-  }));
+  return useConfigurator(
+    useShallow((state) => ({
+      layout: state.layout,
+      case: state.case,
+      colorway: state.colorway,
+      switches: state.switches,
+      plate: state.plate,
+      cable: state.cable,
+      wrist: state.wrist,
+    })),
+  );
 }
 
-export function usePrice() {
-  return useConfigurator((state) => calcPrice(state));
+export function usePrice(): ReturnType<typeof calcPrice> {
+  const config = useConfig();
+  return useMemo(() => calcPrice(config), [config]);
 }

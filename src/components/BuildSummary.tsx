@@ -36,11 +36,19 @@ async function copyText(text: string): Promise<void> {
 export function BuildSummary({ open, onClose }: Props) {
   const { items, total } = usePrice();
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Pinned rather than read inside the effect: onClose is a fresh closure on
+  // every parent render, so the effect can re-run while the modal is open, and
+  // by then document.activeElement is the dialog itself — restoring focus to it
+  // instead of to the control that opened it.
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    const previous = document.activeElement as HTMLElement | null;
+    if (!open) {
+      restoreFocusRef.current = null;
+      return;
+    }
+    restoreFocusRef.current ??= document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
     dialog?.focus();
 
@@ -72,16 +80,24 @@ export function BuildSummary({ open, onClose }: Props) {
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = '';
-      previous?.focus();
+      restoreFocusRef.current?.focus();
     };
   }, [open, onClose]);
+
+  // Owning the timer in an effect means closing the modal cancels it, and it
+  // cannot leak. This hook sits above the early return so the confirmation
+  // still resets itself if the modal is closed mid-countdown.
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
 
   if (!open) return null;
 
   const handleCopy = async () => {
     await copyText(window.location.href);
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (

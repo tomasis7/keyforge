@@ -1,19 +1,25 @@
-interface SwatchOption {
-  id: string;
+interface SwatchOption<Id extends string> {
+  id: Id;
   name: string;
   hex?: string | null;
   colors?: [string, string, string];
 }
 
-interface Props {
+interface Props<Id extends string> {
   legend: string;
   name: string;
-  value: string;
-  options: SwatchOption[];
-  onChange: (id: string) => void;
+  value: Id;
+  options: readonly SwatchOption<Id>[];
+  onChange: (id: Id) => void;
 }
 
-export function SwatchGroup({ legend, name, value, options, onChange }: Props) {
+export function SwatchGroup<Id extends string>({
+  legend,
+  name,
+  value,
+  options,
+  onChange,
+}: Props<Id>) {
   return (
     <fieldset className="option-group">
       <legend className="option-legend">{legend}</legend>
@@ -30,8 +36,10 @@ export function SwatchGroup({ legend, name, value, options, onChange }: Props) {
             />
             {option.colors ? (
               <span className="swatch-chip swatch-chip-strip">
-                {option.colors.map((color) => (
-                  <span key={color} style={{ background: color }} />
+                {/* Keyed by position: the three zones are a fixed-length tuple,
+                    and a colorway may legitimately repeat a colour across them. */}
+                {option.colors.map((color, i) => (
+                  <span key={i} style={{ background: color }} />
                 ))}
               </span>
             ) : (

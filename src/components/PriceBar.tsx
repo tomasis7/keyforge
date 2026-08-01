@@ -7,15 +7,20 @@ interface Props {
 
 export function PriceBar({ onReview }: Props) {
   const { total } = usePrice();
-  const display = useAnimatedNumber(total);
+  const displayRef = useAnimatedNumber(total, '$');
 
   return (
     <div className="price-bar">
       <div className="container price-bar-inner">
-        <p className="price-total" aria-live="polite">
+        <p className="price-total" aria-hidden="true">
           <span className="price-total-label">Total</span>
-          <span className="price-total-value">${display}</span>
+          {/* Deliberately childless: GSAP owns this text node. */}
+          <span className="price-total-value" ref={displayRef} />
         </p>
+        {/* The visible number ticks once per animation frame, which a live
+            region would announce ~30 times per change. Announce the settled
+            total instead. */}
+        <p className="sr-only" aria-live="polite">Total ${total}</p>
         <button type="button" className="btn" onClick={onReview}>
           Review build
         </button>

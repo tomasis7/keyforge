@@ -1,19 +1,27 @@
-interface ChoiceOption {
-  id: string;
+interface ChoiceOption<Id extends string> {
+  id: Id;
   name: string;
   desc?: string;
   meta?: string;
 }
 
-interface Props {
+interface Props<Id extends string> {
   legend: string;
   name: string;
-  value: string;
-  options: ChoiceOption[];
-  onChange: (id: string) => void;
+  value: Id;
+  options: readonly ChoiceOption<Id>[];
+  onChange: (id: Id) => void;
 }
 
-export function ChoiceGroup({ legend, name, value, options, onChange }: Props) {
+// Generic over the id union so onChange hands back e.g. LayoutId rather than
+// string, and wiring a group to the wrong option list fails to compile.
+export function ChoiceGroup<Id extends string>({
+  legend,
+  name,
+  value,
+  options,
+  onChange,
+}: Props<Id>) {
   return (
     <fieldset className="option-group">
       <legend className="option-legend">{legend}</legend>

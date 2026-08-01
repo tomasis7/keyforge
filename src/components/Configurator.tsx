@@ -5,6 +5,7 @@ import {
   recolorCase,
   recolorKeys,
 } from '../animations/keyboard';
+import { refreshScrollReveals } from '../animations/scroll';
 import { CASE_OPTIONS, COLORWAYS, type CaseId, type ColorwayId } from '../data/options';
 import { useConfigurator } from '../store/configurator';
 import { BuildSummary } from './BuildSummary';
@@ -27,6 +28,8 @@ export function Configurator() {
   useLayoutEffect(() => {
     const state = consumeLayoutFlip();
     if (state && viewerRef.current) animateFlip(state);
+    // The board's aspect ratio changed, so everything below it moved.
+    refreshScrollReveals();
   }, [layout]);
 
   useLayoutEffect(() => {
@@ -35,7 +38,10 @@ export function Configurator() {
     if (previous === null || previous === colorwayId || !viewerRef.current) return;
     const from = COLORWAYS.find((c) => c.id === previous) ?? COLORWAYS[0];
     recolorKeys(viewerRef.current, from, colorway);
-  }, [colorwayId]);
+    // `colorway` is a stable reference from the module-level COLORWAYS array,
+    // so it changes exactly when colorwayId does — listing it is honest rather
+    // than a suppression.
+  }, [colorwayId, colorway]);
 
   useLayoutEffect(() => {
     const previous = prevCaseRef.current;
@@ -43,7 +49,7 @@ export function Configurator() {
     if (previous === null || previous === caseId || !viewerRef.current) return;
     const from = CASE_OPTIONS.find((c) => c.id === previous) ?? CASE_OPTIONS[0];
     recolorCase(viewerRef.current, from.hex, caseOption.hex);
-  }, [caseId]);
+  }, [caseId, caseOption.hex]);
 
   return (
     <section id="configurator" className="configurator">

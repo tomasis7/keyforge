@@ -1,14 +1,10 @@
 import { captureLayoutFlip } from '../animations/keyboard';
-import { LAYOUTS, type LayoutId } from '../data/layouts';
+import { LAYOUTS } from '../data/layouts';
 import {
   CASE_OPTIONS,
   COLORWAYS,
   PLATE_OPTIONS,
   SWITCH_OPTIONS,
-  type CaseId,
-  type ColorwayId,
-  type PlateId,
-  type SwitchId,
 } from '../data/options';
 import { useConfigurator } from '../store/configurator';
 import { ChoiceGroup } from './ChoiceGroup';
@@ -66,7 +62,7 @@ export function OptionsPanel() {
         options={LAYOUTS}
         onChange={(id) => {
           captureLayoutFlip();
-          set('layout', id as LayoutId);
+          set('layout', id);
         }}
       />
       <SwatchGroup
@@ -74,28 +70,28 @@ export function OptionsPanel() {
         name="case"
         value={caseId}
         options={CASE_OPTIONS}
-        onChange={(id) => set('case', id as CaseId)}
+        onChange={(id) => set('case', id)}
       />
       <SwatchGroup
         legend="Keycaps"
         name="colorway"
         value={colorway}
         options={COLORWAY_SWATCHES}
-        onChange={(id) => set('colorway', id as ColorwayId)}
+        onChange={(id) => set('colorway', id)}
       />
       <ChoiceGroup
         legend="Switches"
         name="switches"
         value={switches}
         options={SWITCH_CHOICES}
-        onChange={(id) => set('switches', id as SwitchId)}
+        onChange={(id) => set('switches', id)}
       />
       <ChoiceGroup
         legend="Plate"
         name="plate"
         value={plate}
         options={PLATE_OPTIONS}
-        onChange={(id) => set('plate', id as PlateId)}
+        onChange={(id) => set('plate', id)}
       />
       <ExtrasGroup />
     </aside>

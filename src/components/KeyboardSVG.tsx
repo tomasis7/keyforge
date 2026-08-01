@@ -1,6 +1,7 @@
 import { useId, useMemo } from 'react';
 import type { LayoutId } from '../data/layouts';
 import type { CaseOption, ColorwayOption } from '../data/options';
+import { keyBaseColor } from '../lib/color';
 import { buildBoard, KEY_R, TOP_R } from '../lib/keyboard';
 
 interface Props {
@@ -54,7 +55,7 @@ export function KeyboardSVG({ layout, caseOption, colorway }: Props) {
               width={key.bw}
               height={key.bh}
               rx={KEY_R}
-              style={{ fill: `color-mix(in srgb, ${fill} 68%, black)` }}
+              style={{ fill: keyBaseColor(fill) }}
             />
             <rect
               className="key-top"

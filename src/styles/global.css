@@ -264,6 +264,19 @@ body {
   clip-path: inset(50%);
 }
 
+/* Announced but never rendered. Unlike .sr-radio this is not focusable. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* --- Swatches --- */
 
 .swatch-row {
@@ -284,6 +297,14 @@ body {
 
 .swatch:has(.sr-radio:checked) {
   animation: swatch-pop var(--d-med) var(--ease-spring);
+}
+
+/* The JS animation layer checks prefers-reduced-motion at call time; this is
+   the only motion expressed purely in CSS, so it needs its own opt-out. */
+@media (prefers-reduced-motion: reduce) {
+  .swatch:has(.sr-radio:checked) {
+    animation: none;
+  }
 }
 
 @keyframes swatch-pop {

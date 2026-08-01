@@ -1,6 +1,7 @@
 import gsap from 'gsap';
 import { Flip } from 'gsap/Flip';
 import type { ColorwayOption } from '../data/options';
+import { keyBaseColor } from '../lib/color';
 import { EASE_EXPO, EASE_POWER2, reducedMotion } from './motion';
 
 gsap.registerPlugin(Flip);
@@ -43,13 +44,24 @@ export function animateFlip(state: Flip.FlipState): void {
           { opacity: 1, scale: 1, duration: 0.4 },
         ),
       ),
-    onLeave: (els) =>
-      els.forEach((el) => gsap.to(el, { opacity: 0, scale: 0.6, duration: 0.3 })),
+    // No onLeave: React unmounts departing keys before this runs, so Flip hands
+    // us detached nodes (its isVisible test reads getBoundingClientRect, which
+    // is all-zero once detached) and it never re-inserts them. A tween here
+    // animates nothing. Exits are therefore instant — most visible on 75% -> 65%,
+    // which drops all 15 F-row keys. Animating them would mean re-appending the
+    // nodes and re-fitting them to their captured position by hand, because the
+    // viewBox has already changed underneath them.
   });
 }
 
-const zoneOfElement = (el: Element): Zone =>
-  el.closest('.key')?.getAttribute('data-zone') as Zone;
+// Total by construction: every .key is rendered with a data-zone from a typed
+// Zone field. The fallback is unreachable, but returning a real zone (rather
+// than undefined, which GSAP would skip) means a malformed key recolours to
+// something plausible instead of being stranded at its previous colour.
+const zoneOfElement = (el: Element): Zone => {
+  const zone = el.closest('.key')?.getAttribute('data-zone');
+  return zone === 'mod' || zone === 'accent' ? zone : 'alpha';
+};
 
 export function recolorKeys(
   root: HTMLElement,
@@ -59,11 +71,14 @@ export function recolorKeys(
   if (reducedMotion()) return;
 
   const tops: HTMLElement[] = [];
+  const bases: HTMLElement[] = [];
   const labels: HTMLElement[] = [];
   root.querySelectorAll<HTMLElement>('.key').forEach((key) => {
     const top = key.querySelector<HTMLElement>('.key-top');
+    const base = key.querySelector<HTMLElement>('.key-base');
     const label = key.querySelector<HTMLElement>('.key-label');
     if (top) tops.push(top);
+    if (base) bases.push(base);
     if (label) labels.push(label);
   });
 
@@ -72,21 +87,38 @@ export function recolorKeys(
     (_index: number, el: Element): string =>
       colorway[zoneOfElement(el)];
 
+  const baseColor =
+    (colorway: ColorwayOption) =>
+    (_index: number, el: Element): string =>
+      keyBaseColor(colorway[zoneOfElement(el)]);
+
   const labelColor =
     (colorway: ColorwayOption) =>
     (_index: number, el: Element): string =>
       colorway[LABEL_KEY[zoneOfElement(el)]];
 
-  gsap.fromTo(
-    tops,
-    { fill: zoneColor(oldColorway) },
-    { fill: zoneColor(newColorway), duration: 0.3, ease: EASE_POWER2, stagger: 0.005 },
-  );
-  gsap.fromTo(
-    labels,
-    { fill: labelColor(oldColorway) },
-    { fill: labelColor(newColorway), duration: 0.3, ease: EASE_POWER2, stagger: 0.005 },
-  );
+  // overwrite: true — a colorway switch mid-tween would otherwise leave two
+  // fromTo tweens rendering the same fill property and fighting each tick.
+  const tween = (
+    targets: HTMLElement[],
+    from: (i: number, el: Element) => string,
+    to: (i: number, el: Element) => string,
+  ) =>
+    gsap.fromTo(
+      targets,
+      { fill: from },
+      {
+        fill: to,
+        duration: 0.3,
+        ease: EASE_POWER2,
+        stagger: 0.005,
+        overwrite: true,
+      },
+    );
+
+  tween(tops, zoneColor(oldColorway), zoneColor(newColorway));
+  tween(bases, baseColor(oldColorway), baseColor(newColorway));
+  tween(labels, labelColor(oldColorway), labelColor(newColorway));
 }
 
 export function recolorCase(root: HTMLElement, oldHex: string, newHex: string): void {
@@ -96,6 +128,6 @@ export function recolorCase(root: HTMLElement, oldHex: string, newHex: string): 
   gsap.fromTo(
     rect,
     { fill: oldHex },
-    { fill: newHex, duration: 0.3, ease: EASE_POWER2 },
+    { fill: newHex, duration: 0.3, ease: EASE_POWER2, overwrite: true },
   );
 }

@@ -1,9 +1,4 @@
-import {
-  CABLE_OPTIONS,
-  WRIST_OPTIONS,
-  type CableId,
-  type WristId,
-} from '../data/options';
+import { CABLE_OPTIONS, WRIST_OPTIONS } from '../data/options';
 import { useConfigurator } from '../store/configurator';
 import { ChoiceGroup } from './ChoiceGroup';
 import { SwatchGroup } from './SwatchGroup';
@@ -20,14 +15,14 @@ export function ExtrasGroup() {
         name="cable"
         value={cable}
         options={CABLE_OPTIONS}
-        onChange={(id) => set('cable', id as CableId)}
+        onChange={(id) => set('cable', id)}
       />
       <ChoiceGroup
         legend="Wrist rest"
         name="wrist"
         value={wrist}
         options={WRIST_OPTIONS}
-        onChange={(id) => set('wrist', id as WristId)}
+        onChange={(id) => set('wrist', id)}
       />
     </div>
   );
