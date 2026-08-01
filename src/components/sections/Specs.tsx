@@ -1,4 +1,17 @@
+import { LAYOUTS } from '../../data/layouts';
+import { boardSpecs } from '../../lib/keyboard';
+
+const SHARED_SPECS: [string, string][] = [
+  ['Connectivity', 'USB-C · Bluetooth 5.1 · 2.4 GHz'],
+  ['Battery', '4000 mAh'],
+  ['Hot-swap', 'Yes'],
+];
+
 export function Specs() {
+  // Derived from the same layout matrices the board is drawn from, so the table
+  // cannot drift from what the configurator actually renders.
+  const specs = LAYOUTS.map((layout) => ({ layout, ...boardSpecs(layout.id) }));
+
   return (
     <section className="section" data-reveal-group>
       <div className="container">
@@ -10,34 +23,34 @@ export function Specs() {
             <thead>
               <tr>
                 <th scope="col">Spec</th>
-                <th scope="col">65%</th>
-                <th scope="col">75%</th>
-                <th scope="col">TKL</th>
+                {specs.map(({ layout }) => (
+                  <th scope="col" key={layout.id}>
+                    {layout.name}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               <tr>
                 <th scope="row">Dimensions</th>
-                <td>322 × 124 mm</td>
-                <td>368 × 142 mm</td>
-                <td>368 × 134 mm</td>
+                {specs.map(({ layout, widthMm, depthMm }) => (
+                  <td key={layout.id}>
+                    {widthMm} × {depthMm} mm
+                  </td>
+                ))}
               </tr>
               <tr>
                 <th scope="row">Weight</th>
-                <td colSpan={3}>1.6 kg CNC aluminum</td>
+                {specs.map(({ layout, weightKg }) => (
+                  <td key={layout.id}>{weightKg.toFixed(2)} kg</td>
+                ))}
               </tr>
-              <tr>
-                <th scope="row">Connectivity</th>
-                <td colSpan={3}>USB-C · Bluetooth 5.1 · 2.4 GHz</td>
-              </tr>
-              <tr>
-                <th scope="row">Battery</th>
-                <td colSpan={3}>4000 mAh</td>
-              </tr>
-              <tr>
-                <th scope="row">Hot-swap</th>
-                <td colSpan={3}>Yes</td>
-              </tr>
+              {SHARED_SPECS.map(([label, value]) => (
+                <tr key={label}>
+                  <th scope="row">{label}</th>
+                  <td colSpan={specs.length}>{value}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

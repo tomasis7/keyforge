@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
+  animateExits,
   animateFlip,
   consumeLayoutFlip,
   recolorCase,
@@ -28,6 +29,7 @@ export function Configurator() {
   useLayoutEffect(() => {
     const state = consumeLayoutFlip();
     if (state && viewerRef.current) animateFlip(state);
+    if (viewerRef.current) animateExits(viewerRef.current);
     // The board's aspect ratio changed, so everything below it moved.
     refreshScrollReveals();
   }, [layout]);

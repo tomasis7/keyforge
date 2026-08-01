@@ -111,3 +111,32 @@ export function buildBoard(layoutId: LayoutId): Board {
     keys,
   };
 }
+
+/** Standard mechanical keyboard key pitch. */
+const PITCH_MM = 19.05;
+const BEZEL_X_MM = 17;
+const BEZEL_Y_MM = 29;
+/** Calibrated so a 16u x 6-row board comes out at the 1.6 kg quoted in SPEC. */
+const KG_PER_SQUARE_U = 1.6 / (16 * 6);
+
+export interface BoardSpecs {
+  widthMm: number;
+  depthMm: number;
+  weightKg: number;
+}
+
+/**
+ * Physical specs derived from the layout matrix rather than transcribed by
+ * hand. The spec table previously quoted one weight for all three boards and
+ * the same width for 75% and TKL, which cannot both be right: they are 16u and
+ * 18.5u wide respectively.
+ */
+export function boardSpecs(layoutId: LayoutId): BoardSpecs {
+  const board = buildBoard(layoutId);
+  const rows = (LAYOUTS.find((l) => l.id === layoutId)?.rows ?? []).length;
+  return {
+    widthMm: Math.round(board.widthU * PITCH_MM + BEZEL_X_MM),
+    depthMm: Math.round(rows * PITCH_MM + BEZEL_Y_MM),
+    weightKg: Math.round(board.widthU * rows * KG_PER_SQUARE_U * 100) / 100,
+  };
+}

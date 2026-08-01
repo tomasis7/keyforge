@@ -190,6 +190,15 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: var(--space-8);
+  /* Positioning context for the exit layer (see animations/keyboard.ts). */
+  position: relative;
+}
+
+/* Ghost copies of keys the new layout dropped. Created and removed entirely by
+   the animation layer — React never sees it. */
+.board-exit-layer {
+  position: absolute;
+  pointer-events: none;
 }
 
 @media (max-width: 1024px) {

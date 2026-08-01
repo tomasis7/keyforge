@@ -54,6 +54,10 @@ elements. The rule used here: **any node GSAP animates has no React children and
 no React-managed value for the property being animated.**
 
 - The price count-up target is a childless `<span>` — React never writes text to it.
+- Keys that a layout change drops are replayed from a clone taken *before* the
+  store update, in a layer the animation code creates and destroys itself. Flip
+  cannot do this: by the time its `onLeave` fires, React has detached those nodes
+  and they have no box to animate.
 - Keycap fills are set by React on render and then tweened by GSAP; React's style
   diffing compares previous props, not the DOM, so it does not clobber a running
   tween. The tweens use `overwrite: true` so overlapping colorway switches cannot
@@ -68,9 +72,15 @@ call time rather than cached, plus a CSS opt-out for the one keyframe animation.
 Option groups are real `fieldset`/`radio` markup rather than styled divs. The
 price is announced once per settled total, not once per animation frame.
 
+### Physical specs
+
+The numbers in the spec table are derived from the same layout matrices the
+board is drawn from (`boardSpecs`), not transcribed. They previously quoted one
+weight for all three boards and the same width for 75% and TKL, which cannot
+both be right — those layouts are 16u and 18.5u wide.
+
 ## Known gaps
 
-- Keys that leave a layout (75% → 65% drops the 15 F-row keys) disappear without
-  an exit animation. React unmounts them before Flip runs, so Flip receives
-  detached nodes and cannot animate them.
-- The Specs table lists one weight for all three layouts.
+- `og:image` and `og:url` need an absolute URL, so they wait on a deploy domain.
+  Until then `twitter:card` is `summary` rather than `summary_large_image`.
+- No component-level tests; the suite covers the pure functions only.

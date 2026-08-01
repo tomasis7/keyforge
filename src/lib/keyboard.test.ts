@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LAYOUTS, type LayoutId } from '../data/layouts';
-import { buildBoard, displayLabel, zoneOf } from './keyboard';
+import { boardSpecs, buildBoard, displayLabel, zoneOf } from './keyboard';
 
 const ids = LAYOUTS.map((l) => l.id);
 
@@ -69,6 +69,33 @@ describe('key identity is semantic', () => {
   it('distinguishes repeated labels by occurrence', () => {
     const shifts = buildBoard('65').keys.filter((k) => k.keyId.startsWith('shift-'));
     expect(shifts.map((k) => k.keyId)).toEqual(['shift-0', 'shift-1']);
+  });
+});
+
+describe('boardSpecs', () => {
+  it('reproduces the 65% figures the spec table already quoted', () => {
+    expect(boardSpecs('65')).toMatchObject({ widthMm: 322, depthMm: 124 });
+  });
+
+  it('gives boards of equal width in units the same width in mm', () => {
+    // 65% and 75% are both 16u; only their row count differs.
+    expect(buildBoard('65').widthU).toBe(buildBoard('75').widthU);
+    expect(boardSpecs('65').widthMm).toBe(boardSpecs('75').widthMm);
+  });
+
+  it('makes TKL wider than 75%, matching 18.5u vs 16u', () => {
+    expect(boardSpecs('tkl').widthMm).toBeGreaterThan(boardSpecs('75').widthMm);
+  });
+
+  it('gives boards with equal row counts the same depth', () => {
+    expect(boardSpecs('75').depthMm).toBe(boardSpecs('tkl').depthMm);
+    expect(boardSpecs('65').depthMm).toBeLessThan(boardSpecs('75').depthMm);
+  });
+
+  it('scales weight with plate area, never quoting one figure for all', () => {
+    const weights = LAYOUTS.map((l) => boardSpecs(l.id).weightKg);
+    expect(new Set(weights).size).toBe(LAYOUTS.length);
+    expect(weights).toEqual([...weights].sort((a, b) => a - b));
   });
 });
 
