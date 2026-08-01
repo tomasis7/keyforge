@@ -7,6 +7,8 @@
  * mock-up that can drift from it.
  */
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { CASE_OPTIONS, COLORWAYS } from '../src/data/options';
 import { keyBaseColor } from '../src/lib/color';
 import { buildBoard, KEY_R, TOP_R } from '../src/lib/keyboard';
@@ -53,14 +55,32 @@ export function boardSvg(layout: '65' | '75' | 'tkl', caseHex: string, colorwayI
 </svg>`;
 }
 
+/**
+ * The site's own woff2 files, inlined as data URIs.
+ *
+ * The card used to link the Google Fonts stylesheet, which meant it needed
+ * network access to render and — now that the site self-hosts — was not
+ * guaranteed to use the same binaries the site ships. Inlining the local files
+ * makes `npm run og` work offline and makes the preview's type identical to the
+ * page's by construction. It also folds the fonts into the fingerprint, so
+ * swapping a typeface is caught like any other card input.
+ */
+function fontFaces(): string {
+  const dir = resolve(process.cwd(), 'src/styles/fonts');
+  const css = readFileSync(resolve(process.cwd(), 'src/styles/fonts.css'), 'utf8');
+  // Rewrite each url('./fonts/x.woff2') to the file's base64 contents.
+  return css.replace(/url\('\.\/fonts\/([^']+)'\)/g, (_match, file: string) => {
+    const data = readFileSync(resolve(dir, file)).toString('base64');
+    return `url('data:font/woff2;base64,${data}')`;
+  });
+}
+
 export function page(): string {
   const caseOption = CASE_OPTIONS.find((c) => c.id === 'black') ?? CASE_OPTIONS[0];
   return `<!doctype html>
 <html><head><meta charset="utf-8"/>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
+${fontFaces()}
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     width: ${WIDTH}px; height: ${HEIGHT}px; overflow: hidden;

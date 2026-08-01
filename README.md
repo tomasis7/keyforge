@@ -124,8 +124,11 @@ rather than four times. Only the latin subset is kept.
 `buildBoard` geometry and colorway data the app uses, so the preview shows the
 real product rather than a mock-up that can drift from it. It rasterises in a
 real browser (via `puppeteer-core`, driving whatever Chrome is already
-installed) because the type is Google-hosted — an SVG rasteriser would silently
-substitute a fallback face.
+installed) because an SVG rasteriser has no webfont support and would silently
+substitute a fallback face for every legend.
+
+The site's own woff2 files are inlined into the card as data URIs, so it renders
+with no network access and its type is identical to the page's by construction.
 
 The PNG is committed, so neither CI nor a deploy needs a browser. The cost of
 that is staleness — change a colorway and the card still shows the old one. So
