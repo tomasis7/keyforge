@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, type Config } from '../data/options';
-import { parseSearch, serializeParams } from './url';
+import {
+  HISTORY_COALESCE_MS,
+  historyMethod,
+  parseSearch,
+  serializeParams,
+} from './url';
 
 describe('parseSearch', () => {
   it('accepts known ids', () => {
@@ -33,6 +38,23 @@ describe('serializeParams', () => {
   it('writes only what differs from the default', () => {
     const config: Config = { ...DEFAULT_CONFIG, layout: 'tkl', wrist: 'walnut' };
     expect(serializeParams(config)).toBe('l=tkl&wr=walnut');
+  });
+});
+
+describe('historyMethod', () => {
+  it('collapses rapid successive edits into one entry', () => {
+    expect(historyMethod(0)).toBe('replaceState');
+    expect(historyMethod(HISTORY_COALESCE_MS - 1)).toBe('replaceState');
+  });
+
+  it('gives a deliberate, spaced-out edit its own entry', () => {
+    expect(historyMethod(HISTORY_COALESCE_MS)).toBe('pushState');
+    expect(historyMethod(5000)).toBe('pushState');
+  });
+
+  it('pushes on the very first write', () => {
+    // lastWrite starts at -Infinity, so the first change is always undoable.
+    expect(historyMethod(Number.POSITIVE_INFINITY)).toBe('pushState');
   });
 });
 

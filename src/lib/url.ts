@@ -52,8 +52,35 @@ export function serializeParams(config: Config): string {
   return params.join('&');
 }
 
-export function syncUrl(config: Config): void {
+/**
+ * Changes closer together than this collapse into the existing history entry.
+ *
+ * Every change used to replaceState, so Back left the site and took the build
+ * with it. Pushing on every change is the opposite problem: nudging through
+ * five colorways would bury the referring page under five entries. Coalescing
+ * by time means deliberate, spaced-out edits are undoable and rapid fiddling
+ * is not.
+ */
+export const HISTORY_COALESCE_MS = 700;
+
+export function historyMethod(msSinceLastWrite: number): 'pushState' | 'replaceState' {
+  return msSinceLastWrite < HISTORY_COALESCE_MS ? 'replaceState' : 'pushState';
+}
+
+export function configUrl(config: Config): string {
   const query = serializeParams(config);
-  const url = query ? `${window.location.pathname}?${query}` : window.location.pathname;
-  window.history.replaceState(null, '', url);
+  return query ? `${window.location.pathname}?${query}` : window.location.pathname;
+}
+
+let lastWrite = Number.NEGATIVE_INFINITY;
+
+export function syncUrl(config: Config, now = Date.now()): void {
+  const url = configUrl(config);
+  // Applying a popstate writes the same URL straight back through the store
+  // subscription; without this guard that would push a duplicate entry and
+  // make Back appear to do nothing.
+  if (url === window.location.pathname + window.location.search) return;
+
+  window.history[historyMethod(now - lastWrite)](null, '', url);
+  lastWrite = now;
 }

@@ -1,14 +1,15 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   animateExits,
   animateFlip,
+  captureLayoutFlip,
   consumeLayoutFlip,
   recolorCase,
   recolorKeys,
 } from '../animations/keyboard';
 import { refreshScrollReveals } from '../animations/scroll';
 import { CASE_OPTIONS, COLORWAYS, type CaseId, type ColorwayId } from '../data/options';
-import { useConfigurator } from '../store/configurator';
+import { configFromUrl, useConfigurator } from '../store/configurator';
 import { BuildSummary } from './BuildSummary';
 import { KeyboardSVG } from './KeyboardSVG';
 import { OptionsPanel } from './OptionsPanel';
@@ -25,6 +26,20 @@ export function Configurator() {
 
   const caseOption = CASE_OPTIONS.find((c) => c.id === caseId) ?? CASE_OPTIONS[0];
   const colorway = COLORWAYS.find((c) => c.id === colorwayId) ?? COLORWAYS[0];
+
+  // Back/Forward move through the configuration rather than off the site.
+  // Handled here rather than in the store because a layout change arriving via
+  // history should still morph the board, and the flip is this component's job.
+  useEffect(() => {
+    const onPopState = () => {
+      const next = configFromUrl();
+      const store = useConfigurator.getState();
+      if (next.layout !== store.layout) captureLayoutFlip();
+      store.applyFromUrl(next);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   useLayoutEffect(() => {
     const state = consumeLayoutFlip();

@@ -78,6 +78,20 @@ low-vision user can read a key. Every legend/cap pair is asserted to clear AA
 (4.5:1) in `contrast.test.ts`, which is the guard that stops a palette tweak
 from quietly dropping one below the line.
 
+### URL and history
+
+The whole configuration lives in the query string, so a build is a link. Back
+and Forward step through the configuration rather than off the site, which
+means the store has to be writable *from* the URL as well as to it — hence
+`applyFromUrl`, and a `syncUrl` that no-ops when the URL already matches, so
+applying a popstate cannot write an entry straight back.
+
+History entries are coalesced by time (`HISTORY_COALESCE_MS`): changes closer
+together than the window replace the current entry, spaced-out ones push a new
+one. Pushing on every change would bury the referring page under an entry per
+click; replacing on every change — the original behaviour — meant Back left the
+site and took the build with it.
+
 ### Physical specs
 
 The numbers in the spec table are derived from the same layout matrices the
@@ -116,5 +130,3 @@ when the palette or board design changes.
 - The share card is generated on demand, not in CI, so it can fall out of date
   with the palette until someone runs `npm run og`.
 - No component-level tests; the suite covers the pure functions only.
-- Browser history uses `replaceState`, so Back leaves the site rather than
-  undoing a configuration change.

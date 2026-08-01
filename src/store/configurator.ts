@@ -19,6 +19,8 @@ interface ConfigStore extends Config {
   set: <K extends keyof Config>(key: K, value: Config[K]) => void;
   randomize: () => void;
   reset: () => void;
+  /** Applies a config that came *from* the URL, e.g. after a Back press. */
+  applyFromUrl: (config: Config) => void;
 }
 
 const pick = <T,>(options: readonly T[]): T =>
@@ -34,14 +36,22 @@ const randomConfig = (): Config => ({
   wrist: pick(WRIST_OPTIONS.map((o) => o.id)),
 });
 
-export const useConfigurator = create<ConfigStore>()((set) => ({
+/** Reads the URL as a whole config, so anything absent falls back to default. */
+export const configFromUrl = (): Config => ({
   ...DEFAULT_CONFIG,
   ...parseSearch(window.location.search),
+});
+
+export const useConfigurator = create<ConfigStore>()((set) => ({
+  ...configFromUrl(),
   set: (key, value) => set({ [key]: value } as Partial<Config>),
   randomize: () => set(randomConfig()),
   reset: () => set({ ...DEFAULT_CONFIG }),
+  applyFromUrl: (config) => set({ ...config }),
 }));
 
+// syncUrl no-ops when the URL already matches, so applying a popstate does not
+// write an entry back and strand the user on the same page.
 useConfigurator.subscribe((state) => syncUrl(state));
 
 // useShallow keeps the identity of the returned object stable while the config
