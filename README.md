@@ -139,6 +139,10 @@ asserts the committed value still matches. Changing the palette without running
 
 ## Known gaps
 
+- The footer's "Get in touch" address is a placeholder on a fictional domain and
+  receives no mail. It is demo copy; the site is a portfolio piece rather than a
+  storefront.
+
 - The share card's fingerprint covers everything in the card template, which
   includes its CSS and copy. It does not cover the screenshot options in
   `generate-og.ts` (the device scale factor), since those sit outside the
