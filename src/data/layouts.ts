@@ -45,7 +45,10 @@ export const LAYOUTS: KeyboardLayout[] = [
     name: '75%',
     rows: [
       [k('esc'), gap(0.25), ...F1_4.map((n) => k(n)), gap(0.25), ...F5_8.map((n) => k(n)), gap(0.25), ...F9_12.map((n) => k(n)), gap(0.25), k('prt'), k('del')],
-      ...MAIN_ROWS,
+      // Spec amendment (orchestrator-approved): number row starts with ` —
+      // MAIN_ROWS[0] has esc in this position, which would duplicate esc.
+      [k('`'), ...NUM.map((n) => k(n)), k('bksp', 2), k('del')],
+      ...MAIN_ROWS.slice(1),
     ],
   },
   { id: 'tkl', name: 'TKL', rows: TKL_ROWS },
