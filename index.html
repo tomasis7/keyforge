@@ -12,19 +12,27 @@
     <meta name="theme-color" content="#0B0B0D" />
     <title>KEYFORGE — Custom Mechanical Keyboards</title>
 
-    <!-- The product is a link you send someone, so a pasted build should
-         preview as something. og:image still needs a real image file; until
-         there is one, twitter:card stays "summary" rather than
-         "summary_large_image", which renders badly empty. -->
+    <!-- The product is a link you send someone, so a pasted build previews as
+         the real board. og.png is generated from the app's own geometry by
+         `npm run og`. og:image must be an absolute URL — crawlers do not
+         resolve relative paths. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="KEYFORGE" />
     <meta property="og:url" content="https://tomasis7.github.io/keyforge/" />
+    <meta property="og:image" content="https://tomasis7.github.io/keyforge/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="KEYFORGE — Build your endgame. A custom mechanical keyboard shown in a dark case with orange accent keycaps."
+    />
     <meta property="og:title" content="KEYFORGE — Build your endgame" />
     <meta
       property="og:description"
       content="Configure a custom mechanical keyboard: layout, case, keycaps, switches, plate and extras. Priced live, shareable in one link."
     />
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://tomasis7.github.io/keyforge/og.png" />
     <meta name="twitter:title" content="KEYFORGE — Build your endgame" />
     <meta
       name="twitter:description"

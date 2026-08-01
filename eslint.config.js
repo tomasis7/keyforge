@@ -33,4 +33,9 @@ export default tseslint.config(
     files: ['**/*.test.ts'],
     languageOptions: { globals: globals.node },
   },
+  {
+    // Build tooling runs in Node, not the browser.
+    files: ['scripts/**/*.ts', 'vite.config.ts', 'eslint.config.js'],
+    languageOptions: { globals: globals.node },
+  },
 );

@@ -85,8 +85,22 @@ board is drawn from (`boardSpecs`), not transcribed. They previously quoted one
 weight for all three boards and the same width for 75% and TKL, which cannot
 both be right — those layouts are 16u and 18.5u wide.
 
+### Share card
+
+`npm run og` renders `public/og.png` by building the board from the same
+`buildBoard` geometry and colorway data the app uses, so the preview shows the
+real product rather than a mock-up that can drift from it. It rasterises in a
+real browser (via `puppeteer-core`, driving whatever Chrome is already
+installed) because the type is Google-hosted — an SVG rasteriser would silently
+substitute a fallback face.
+
+The PNG is committed, so neither CI nor a deploy needs a browser. Regenerate it
+when the palette or board design changes.
+
 ## Known gaps
 
-- `og:image` and `og:url` need an absolute URL, so they wait on a deploy domain.
-  Until then `twitter:card` is `summary` rather than `summary_large_image`.
+- The share card is generated on demand, not in CI, so it can fall out of date
+  with the palette until someone runs `npm run og`.
 - No component-level tests; the suite covers the pure functions only.
+- Browser history uses `replaceState`, so Back leaves the site rather than
+  undoing a configuration change.
