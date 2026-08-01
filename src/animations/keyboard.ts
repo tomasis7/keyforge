@@ -29,7 +29,11 @@ const keyIdsOf = (root: ParentNode): string[] =>
  */
 interface ExitSnapshot {
   board: SVGSVGElement;
-  rect: DOMRect;
+  /** Board size, and its offset *within the viewer*, both measured together. */
+  width: number;
+  height: number;
+  offsetX: number;
+  offsetY: number;
   keyIds: Set<string>;
 }
 
@@ -42,13 +46,28 @@ export function captureLayoutFlip(): void {
   pendingFlip = Flip.getState('.configurator-viewer .key');
 
   const board = document.querySelector<SVGSVGElement>(VIEWER_BOARD);
-  pendingExit = board
-    ? {
-        board: board.cloneNode(true) as SVGSVGElement,
-        rect: board.getBoundingClientRect(),
-        keyIds: new Set(keyIdsOf(board)),
-      }
-    : null;
+  const viewer = board?.closest<HTMLElement>('.configurator-viewer');
+  if (!board || !viewer) {
+    pendingExit = null;
+    return;
+  }
+
+  // Both rects are read here, in the same layout, so their difference is the
+  // board's offset inside the viewer. Measuring the viewer later instead would
+  // mix two coordinate spaces: shrinking the board reflows the page, and scroll
+  // anchoring can move the viewer between now and then — worth 20px of drift on
+  // a phone, where the grid is a single column.
+  const boardRect = board.getBoundingClientRect();
+  const viewerRect = viewer.getBoundingClientRect();
+
+  pendingExit = {
+    board: board.cloneNode(true) as SVGSVGElement,
+    width: boardRect.width,
+    height: boardRect.height,
+    offsetX: boardRect.left - viewerRect.left,
+    offsetY: boardRect.top - viewerRect.top,
+    keyIds: new Set(keyIdsOf(board)),
+  };
 }
 
 export function consumeLayoutFlip(): Flip.FlipState | null {
@@ -86,16 +105,15 @@ export function animateExits(viewer: HTMLElement): void {
     if (!departed.includes(key.getAttribute('data-key-id') ?? '')) key.remove();
   }
 
-  // The clone keeps the *old* viewBox, so sizing the layer to the old board's
-  // screen rect puts every ghost key exactly where its original was.
-  const viewerRect = viewer.getBoundingClientRect();
+  // The clone keeps the *old* viewBox, so a layer at the old board's offset and
+  // size puts every ghost key exactly where its original was.
   const layer = document.createElement('div');
   layer.className = EXIT_LAYER;
   layer.setAttribute('aria-hidden', 'true');
-  layer.style.left = `${snapshot.rect.left - viewerRect.left}px`;
-  layer.style.top = `${snapshot.rect.top - viewerRect.top}px`;
-  layer.style.width = `${snapshot.rect.width}px`;
-  layer.style.height = `${snapshot.rect.height}px`;
+  layer.style.left = `${snapshot.offsetX}px`;
+  layer.style.top = `${snapshot.offsetY}px`;
+  layer.style.width = `${snapshot.width}px`;
+  layer.style.height = `${snapshot.height}px`;
   ghost.setAttribute('width', '100%');
   ghost.setAttribute('height', '100%');
   layer.appendChild(ghost);
