@@ -36,10 +36,12 @@ async function copyText(text: string): Promise<void> {
 export function BuildSummary({ open, onClose }: Props) {
   const { items, total } = usePrice();
   const dialogRef = useRef<HTMLDivElement>(null);
-  // Pinned rather than read inside the effect: onClose is a fresh closure on
-  // every parent render, so the effect can re-run while the modal is open, and
-  // by then document.activeElement is the dialog itself — restoring focus to it
-  // instead of to the control that opened it.
+  // Pinned rather than read inside the effect. onClose is a fresh closure on
+  // every parent render, so the effect tears down and re-runs while the modal
+  // is open. Reading activeElement inline does survive that today — cleanup
+  // refocuses the trigger before the re-run reads it — but only by accident of
+  // that ordering. The ref names the element we mean and does not care how many
+  // times the effect runs.
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const [copied, setCopied] = useState(false);
 

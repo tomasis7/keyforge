@@ -30,7 +30,12 @@ animations/    GSAP: hero, Flip + recolour, price count-up, scroll reveals
 
 The layering is the point: changing a colorway or adding a layout means editing
 `data/`, not hunting through CSS or hand-drawn SVG. `lib/` has no React and no
-DOM dependency, which is why it is where the test suite is aimed.
+DOM dependency, which is why the bulk of the test suite is aimed there.
+
+Component tests cover what the pure functions cannot: the modal's focus trap
+and focus restore, the option groups being real radios that arrow keys operate,
+and the price bar announcing one settled total rather than every frame of the
+count-up.
 
 ### Keyboard geometry
 
@@ -129,4 +134,6 @@ when the palette or board design changes.
 
 - The share card is generated on demand, not in CI, so it can fall out of date
   with the palette until someone runs `npm run og`.
-- No component-level tests; the suite covers the pure functions only.
+- Component tests run in jsdom with `prefers-reduced-motion` forced on, so the
+  animation layer short-circuits. jsdom has no layout engine, so Flip and the
+  exit ghosts can only be verified against a real browser.

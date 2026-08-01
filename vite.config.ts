@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -11,4 +12,12 @@ const base = process.env.VITE_BASE ?? '/';
 export default defineConfig({
   base,
   plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    // Keep the pure-function suites out of jsdom's way where it costs nothing;
+    // they pass either way, but this documents which tests need a DOM.
+    include: ['src/**/*.test.{ts,tsx}'],
+    restoreMocks: true,
+  },
 });
