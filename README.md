@@ -72,6 +72,12 @@ call time rather than cached, plus a CSS opt-out for the one keyframe animation.
 Option groups are real `fieldset`/`radio` markup rather than styled divs. The
 price is announced once per settled total, not once per animation frame.
 
+Keycap legends are text inside an SVG, so WCAG 1.4.3 applies to them — the
+`role="img"` wrapper changes what assistive tech announces, not whether a
+low-vision user can read a key. Every legend/cap pair is asserted to clear AA
+(4.5:1) in `contrast.test.ts`, which is the guard that stops a palette tweak
+from quietly dropping one below the line.
+
 ### Physical specs
 
 The numbers in the spec table are derived from the same layout matrices the

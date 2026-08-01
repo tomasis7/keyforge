@@ -104,7 +104,8 @@ export const COLORWAYS: ColorwayOption[] = [
     accent: '#E4572E',
     onAlpha: '#F2F0EA',
     onMod: '#F2F0EA',
-    onAccent: '#F2F0EA',
+    // Dark legend on the bright orange accent: light was 3.23:1, below AA.
+    onAccent: '#1A1A1E',
     price: 55,
   },
   {
@@ -114,7 +115,11 @@ export const COLORWAYS: ColorwayOption[] = [
     mod: '#5B7A5E',
     accent: '#D9A441',
     onAlpha: '#1A1A1E',
-    onMod: '#F2F0EA',
+    // The mid-tone green is the one cap no palette tone clears AA against:
+    // the usual off-white managed 4.20:1. Pure white reaches 4.78:1, and at
+    // 13px the difference from #F2F0EA is imperceptible — far less visible
+    // than shifting the green itself, which is a large area of the board.
+    onMod: '#FFFFFF',
     onAccent: '#1A1A1E',
     price: 65,
   },
@@ -137,7 +142,9 @@ export const COLORWAYS: ColorwayOption[] = [
     accent: '#4E6E58',
     onAlpha: '#1A1A1E',
     onMod: '#1A1A1E',
-    onAccent: '#1A1A1E',
+    // Light legend on the deep green accent: dark was 3.05:1. Reuses this
+    // colorway's own alpha cream rather than introducing a tone.
+    onAccent: '#F4E9D8',
     price: 80,
   },
 ];
