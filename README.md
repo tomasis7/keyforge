@@ -127,13 +127,19 @@ real browser (via `puppeteer-core`, driving whatever Chrome is already
 installed) because the type is Google-hosted — an SVG rasteriser would silently
 substitute a fallback face.
 
-The PNG is committed, so neither CI nor a deploy needs a browser. Regenerate it
-when the palette or board design changes.
+The PNG is committed, so neither CI nor a deploy needs a browser. The cost of
+that is staleness — change a colorway and the card still shows the old one. So
+`generate-og.ts` also writes a fingerprint of the card's inputs (the template,
+and through it the board geometry and every colour in the palette), and a test
+asserts the committed value still matches. Changing the palette without running
+`npm run og` fails the build rather than silently shipping a stale preview.
 
 ## Known gaps
 
-- The share card is generated on demand, not in CI, so it can fall out of date
-  with the palette until someone runs `npm run og`.
+- The share card's fingerprint covers everything in the card template, which
+  includes its CSS and copy. It does not cover the screenshot options in
+  `generate-og.ts` (the device scale factor), since those sit outside the
+  hashed string.
 - Component tests run in jsdom with `prefers-reduced-motion` forced on, so the
   animation layer short-circuits. jsdom has no layout engine, so Flip and the
   exit ghosts can only be verified against a real browser.
