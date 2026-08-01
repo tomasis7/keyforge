@@ -4,7 +4,10 @@
    Import this file BEFORE any other stylesheet.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+/* Type lives in fonts.css, self-hosted. It used to be an @import of the Google
+   Fonts stylesheet from here, which made the font CSS a *child* request of this
+   file: the browser could not even ask for it until this stylesheet had
+   downloaded and parsed, and the font files were another hop after that. */
 
 :root {
   /* --- Color: surfaces (dark, warm-neutral) --- */

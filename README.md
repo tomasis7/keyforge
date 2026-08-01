@@ -85,6 +85,20 @@ board is drawn from (`boardSpecs`), not transcribed. They previously quoted one
 weight for all three boards and the same width for 75% and TKL, which cannot
 both be right — those layouts are 16u and 18.5u wide.
 
+### Type
+
+Fonts are self-hosted (`src/styles/fonts.css`, regenerate with
+`scripts/fetch-fonts.sh`). They were previously an `@import` of the Google
+Fonts stylesheet from inside `tokens.css`, which made the font CSS a *child*
+request of our own: a trace showed the browser could not even ask for it until
+`index.css` had downloaded and parsed, with the font files another hop after
+that. Self-hosting collapses that chain and drops two third-party DNS/TLS
+handshakes.
+
+Space Grotesk is a variable font — Google serves the same file for every
+requested weight — so it is declared once with a `font-weight: 400 700` range
+rather than four times. Only the latin subset is kept.
+
 ### Share card
 
 `npm run og` renders `public/og.png` by building the board from the same
