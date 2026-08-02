@@ -125,16 +125,42 @@ toward white. On an 18mm case the bezel is most of the case you can see, which
 made Anodized Black render as silver. Measured, that one ramp was worth ~82 of
 the bezel's 146 luminance: more than the environment and every light combined.
 
-### The set: wall, horizon, table
+### Floor stays, plinth turns
+
+The set splits in two, and the split carries the meaning. The **floor** belongs
+to the set and stays put; the **plinth** belongs to the product and is parented
+to `root`, so it turns with the board.
+
+That is what makes dragging read as turning an object over rather than swinging
+a camera around one. A board rotating on a floor that stays still is a camera
+move. A board rotating with the slab it stands on is an object on a turntable —
+and the shadow sweeping across the floor underneath is what sells it.
+
+It also changes what the camera has to frame: `distanceForYaw` solves for the
+*plinth's* footprint, not the case's, because the slab oversails the board on
+every side and turns with it. Framing the case alone let the slab's corners
+swing out of shot on exactly the drag that shows it off.
+
+Four surfaces, four steps of value, darkest to lightest: board, wall, floor,
+plinth. That stack is the whole composition.
+
+### The set: wall, horizon, floor
 
 The hero is a two-colour set — a sky wall and a warm table meeting at a horizon
 — and three things about it are less obvious than they look.
 
-The stage is **full bleed** and the wall is **flat `--bg-0`**, not a gradient. A
-cyclorama wants a gradient, but a full-bleed canvas butts straight onto the
-page, so whatever value the wall takes at that join has to equal the page or the
-join draws a visible band across the hero. A gradient made the wall's top
-lighter than the page and did exactly that.
+The stage is **full bleed**, so the wall butts straight onto the page and
+whatever value it takes at that join has to equal `--bg-0` or the join draws a
+band across the hero. The wall does grade — sky to grey to rose — but its top
+stop is the page colour exactly, and it only travels away from it going *down*,
+where nothing is adjacent to give the game away.
+
+That gradient is written against `screenUV`, not the plane's own UVs. The plane
+is scaled to the frustum and follows a camera that moves with the board, so its
+UVs map to nothing stable on screen. Both ramps also live in the **top third**
+of the frame, because that is the only part of the wall the floor does not
+cover; spread across the full height they put grey and rose below the horizon
+where nothing can see them, and the wall reads as flat sky.
 
 The table is **finite**, and its far edge is solved for per frame. An infinite
 ground plane puts its horizon at eye level, which from a camera looking down 30

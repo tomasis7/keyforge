@@ -27,7 +27,7 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { studioEnvironment } from './studioEnv';
-import { attribute, color, float, min, mix, positionLocal, smoothstep, texture, uv, vec2 } from 'three/tsl';
+import { attribute, color, float, min, mix, positionLocal, screenUV, smoothstep, texture, uv, vec2 } from 'three/tsl';
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, WebGPURenderer } from 'three/webgpu';
 import type { LayoutId } from '../data/layouts';
 import type { CaseOption, ColorwayOption } from '../data/options';
@@ -88,6 +88,12 @@ const BEZEL = 0.3;
  * of fixed size, so it must not grow when the case gets deeper.
  */
 const CHAMFER = 0.08;
+
+/** Top of the floor, a hair under the board so they never z-fight. */
+const FLOOR_Y = -CASE_H / 2 - 0.01;
+/** Thickness of the plinth, and how far it oversails the case on each side. */
+const PLINTH_H = 0.55;
+const PLINTH_MARGIN = 0.9;
 
 export interface HeroScene {
   resize: (width: number, height: number) => void;
@@ -426,7 +432,7 @@ export async function createHeroScene(
   // ortho box the map clamps to its edge texel — which still holds an occluder,
   // so everything beyond smears into one hard rectangle of false shadow across
   // the table. Sized for the shadow, not for the caster.
-  const shadowExtent = Math.max(caseW, caseD) * 1.7;
+  const shadowExtent = Math.max(caseW, caseD) * 1.7 + PLINTH_MARGIN * 2;
   key.shadow.camera.left = -shadowExtent;
   key.shadow.camera.right = shadowExtent;
   key.shadow.camera.top = shadowExtent;
@@ -479,13 +485,32 @@ export async function createHeroScene(
   // Never occludes the board, and never writes depth the case has to fight.
   backdropMat.depthWrite = false;
   {
-    // Flat, and exactly `--bg-0`. It is tempting to give the wall a gradient —
-    // a real cyclorama has one — but the canvas is full bleed and butts
-    // straight onto the page, so any value the wall takes at that join has to
-    // equal the page or the join becomes a visible band across the hero. A
-    // gradient made the wall's top lighter than the page and drew exactly that
-    // line. The set already reads as two colours; the second one is the table.
-    backdropMat.colorNode = color(0x8fcbe8);
+    // Graded in *screen* space, not in the plane's UVs. The plane is scaled to
+    // the frustum and follows a camera that moves with the board, so its UVs do
+    // not map to anything stable on screen; `screenUV` does, which is what lets
+    // the top of the gradient be pinned to the top of the canvas.
+    //
+    // And it has to be pinned there: the stage is full bleed, so the wall butts
+    // straight onto the page and whatever value it takes at that join must
+    // equal `--bg-0` or the join draws a band across the hero. So the top stop
+    // is the page colour exactly, and the wall is free to travel away from it
+    // going down, where nothing is adjacent to give the game away.
+    // Flipped: `screenUV.y` runs 0 at the *top* of the frame, so reading it
+    // directly puts the top stop of the gradient along the bottom edge — which
+    // is exactly where the floor covers it, so the sky never appeared at all
+    // and the wall graded rose-to-grey downward instead of sky-to-rose.
+    const up = screenUV.y.oneMinus();
+    // Both ramps live in the top third of the frame, because that is the only
+    // part of the wall the floor does not cover. Spread across the full height
+    // they put grey and rose below the horizon, where nothing can see them and
+    // the wall reads as flat sky.
+    const toGrey = smoothstep(float(0.8), float(0.94), up).oneMinus();
+    const toRose = smoothstep(float(0.68), float(0.84), up).oneMinus();
+    backdropMat.colorNode = mix(
+      mix(color(0x7fd4f7), color(0xb9c3ca), toGrey),
+      color(0xefb3a8),
+      toRose,
+    );
     // Opaque. Everything below is a real set now rather than a glow composited
     // over the page, so there is nothing to blend into and nothing to hide.
     backdropMat.opacityNode = float(1);
@@ -501,33 +526,59 @@ export async function createHeroScene(
   backdrop.position.set(0, 0, BACKDROP_Z);
   scene.add(backdrop);
 
-  // --- table ----------------------------------------------------------------
-  // The surface the board stands on, and the second of the two colours. It is
-  // what turns a flat field of sky into a *set*: the line where it meets the
-  // wall is a horizon, and a horizon is what tells you the board is standing on
-  // something rather than floating in a colour.
+  // --- floor and plinth -----------------------------------------------------
+  // Two surfaces, and the split is the point. The floor is part of the *set* and
+  // stays put; the plinth belongs to the *product* and turns with it.
   //
-  // Opaque and lit, not a ShadowMaterial catcher. A catcher only draws the
-  // shadow and lets the page through everywhere else, which was right while the
-  // canvas floated over the page; here the table has to have a colour of its
-  // own, take the light, and darken under the board.
-  const tableMat = new MeshPhysicalNodeMaterial();
-  tableMat.color = new Color(0xf3ece2);
-  tableMat.roughness = 0.62;
-  tableMat.metalness = 0;
-  // Finite, and long toward the camera rather than square. Its *far* edge is
-  // the horizon, and the horizon is the whole point — an infinite ground plane
-  // has its horizon at eye level, which from a camera looking down 30-odd
-  // degrees sits far above a 15-degree half-FOV. An unbounded table therefore
-  // fills the entire frame and the wall never appears at all. `frameCamera`
-  // places this so the edge lands in the upper part of the picture.
-  const TABLE_DEPTH = 90;
-  const tableGeom = new PlaneGeometry(400, TABLE_DEPTH);
-  const table = new Mesh(tableGeom, tableMat);
-  table.rotation.x = -Math.PI / 2;
-  table.position.y = -CASE_H / 2 - 0.01;
-  table.receiveShadow = true;
-  scene.add(table);
+  // That is what makes dragging read as turning an object over rather than
+  // swinging a camera around one. A board rotating on a floor that stays still
+  // is a camera move; a board rotating with the slab it stands on is an object
+  // on a turntable, and the shadow sweeping across the floor underneath is the
+  // thing that sells it.
+  // Cool grey, and the coolest surface in the set. It reads as floor rather
+  // than as more table because it is a step darker than the plinth standing on
+  // it — value separation is what stacks the planes, the same reason the wall
+  // grades away from the page colour.
+  const floorMat = new MeshPhysicalNodeMaterial();
+  floorMat.color = new Color(0xb9c3ca);
+  floorMat.roughness = 0.72;
+  floorMat.metalness = 0;
+  // Finite, and long toward the camera. Its *far* edge is the horizon, and an
+  // infinite ground plane has its horizon at eye level — from a camera looking
+  // down 30-odd degrees that sits far above a 15-degree half-FOV, so the floor
+  // fills the whole frame and the wall never appears. `frameCamera` places this
+  // edge so it lands where the picture wants it.
+  const FLOOR_DEPTH = 90;
+  const floorGeom = new PlaneGeometry(400, FLOOR_DEPTH);
+  const floor = new Mesh(floorGeom, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = FLOOR_Y;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Warm off-white, the brightest surface in the shot, so the dark board reads
+  // against it and the whole stack — wall, floor, plinth, board — is four clean
+  // steps of value.
+  const plinthMat = new MeshPhysicalNodeMaterial();
+  plinthMat.color = new Color(0xf7f2ea);
+  plinthMat.roughness = 0.55;
+  plinthMat.metalness = 0;
+  plinthMat.clearcoat = 0.15;
+  const plinthGeom = new RoundedBoxGeometry(
+    caseW + PLINTH_MARGIN * 2,
+    PLINTH_H,
+    caseD + PLINTH_MARGIN * 2,
+    3,
+    0.05,
+  );
+  const plinth = new Mesh(plinthGeom, plinthMat);
+  // Its top face sits flush under the case, so the board is *on* it rather than
+  // hovering over it. Everything below that is the slab's own thickness.
+  plinth.position.y = -CASE_H / 2 - PLINTH_H / 2;
+  plinth.castShadow = true;
+  plinth.receiveShadow = true;
+  // Into `root`, not the scene — this is the whole reason it exists.
+  root.add(plinth);
 
   // --- camera and interaction ----------------------------------------------
   const pointer = new Vector2(0, 0);
@@ -546,7 +597,7 @@ export async function createHeroScene(
    * Where the horizon sits, as a fraction of the half-FOV above frame centre.
    * Above 1 it would leave the picture; near 0 the wall becomes a sliver.
    */
-  const HORIZON_LIFT = 0.55;
+  const HORIZON_LIFT = 0.3;
   /**
    * Breathing room around the board inside the frame. Above 1.0, because the
    * fit it multiplies is not quite exact: it solves for the board's *centre*
@@ -600,10 +651,17 @@ export async function createHeroScene(
   const distanceForYaw = (yaw: number) => {
     const c = Math.abs(Math.cos(yaw));
     const s = Math.abs(Math.sin(yaw));
-    const yawedW = caseW * c + caseD * s;
-    const yawedD = caseD * c + caseW * s;
+    // The plinth is the subject now, not the case. It is wider than the board
+    // on every side and it turns with it, so framing the case alone would let
+    // the slab's corners swing out of shot on exactly the drag that shows it
+    // off.
+    const subjectW = caseW + PLINTH_MARGIN * 2;
+    const subjectD = caseD + PLINTH_MARGIN * 2;
+    const yawedW = subjectW * c + subjectD * s;
+    const yawedD = subjectD * c + subjectW * s;
     const projectedH =
-      yawedD * Math.cos(ELEVATION) + (CASE_H + CAP_H) * Math.sin(ELEVATION);
+      yawedD * Math.cos(ELEVATION) +
+      (CASE_H + CAP_H + PLINTH_H) * Math.sin(ELEVATION);
     return (
       Math.max(
         yawedW / 2 / Math.tan(fovH / 2),
@@ -654,8 +712,8 @@ export async function createHeroScene(
     // its own horizon, where it showed up as a stripe above the wall.
     const farEdge =
       camera.position.z -
-      (camera.position.y + CASE_H / 2) / Math.tan(ELEVATION - horizonTarget);
-    table.position.z = farEdge + TABLE_DEPTH / 2;
+      (camera.position.y - FLOOR_Y) / Math.tan(ELEVATION - horizonTarget);
+    floor.position.z = farEdge + FLOOR_DEPTH / 2;
 
     // Size the sweep to the frustum where it actually sits, so its falloff is
     // measured against what the viewer can see. 2.4x the visible half-extent
@@ -785,8 +843,10 @@ export async function createHeroScene(
       for (const material of legendMats) material.dispose();
       backdropGeom.dispose();
       backdropMat.dispose();
-      tableGeom.dispose();
-      tableMat.dispose();
+      floorGeom.dispose();
+      floorMat.dispose();
+      plinthGeom.dispose();
+      plinthMat.dispose();
       env.dispose();
       atlas.dispose();
       renderer.dispose();

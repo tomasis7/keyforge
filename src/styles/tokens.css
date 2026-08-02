@@ -19,8 +19,8 @@
      exactly (0x8FCBE8) so the full-bleed canvas has no seam where it ends, and
      the panels are the table — which is what makes a card read as an object
      standing on the surface rather than a lighter patch of sky. */
-  --bg-0: #8FCBE8;              /* page background — same as the 3D wall */
-  --bg-1: #A9D9EF;              /* alternating section background */
+  --bg-0: #7FD4F7;              /* page background — same as the 3D wall's top */
+  --bg-1: #9FE0FA;              /* alternating section background */
   --bg-2: #F7F2EA;              /* card / panel — the table colour */
   --bg-3: #FFFDF8;              /* raised control */
   /* Dark hairlines, cooled to sit in the blue. Inverted from the white ones
