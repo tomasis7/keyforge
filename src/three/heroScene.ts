@@ -60,13 +60,9 @@ const rowTilt = (z: number, depth: number): number => (z / depth) * -0.5;
 const S = 1 / KEY_U;
 /** Keycap height, and how far the cap sits above the case top. */
 const CAP_H = 0.42;
-const CASE_H = 2.1;
-/**
- * Extra case beyond the key field, on every side — the frame the keys sit
- * inside. Close to a full key wide, so the board reads as a machined block the
- * keys are set into rather than a plate they are sitting on.
- */
-const BEZEL = 0.85;
+const CASE_H = 3.4;
+/** Extra case beyond the key field, on every side: the frame around the keys. */
+const BEZEL = 0.3;
 /**
  * Width of the bright turn-over along the case's top edge, in world units.
  * Absolute rather than a fraction of case height: a chamfer is a machined edge
@@ -322,7 +318,7 @@ export async function createHeroScene(
   key.shadow.camera.top = 12;
   key.shadow.camera.bottom = -12;
   key.shadow.bias = -0.002;
-  key.shadow.radius = 4;
+  key.shadow.radius = 8;
   scene.add(key);
 
   const kicker = new DirectionalLight(0x9fc4ff, 2.2);
@@ -336,7 +332,9 @@ export async function createHeroScene(
   // sits on the page rather than floating in front of it.
   const shadowPlane = new Mesh(
     new PlaneGeometry(60, 60),
-    new ShadowMaterial({ opacity: 0.5, transparent: true }),
+    // Softer than it was: a taller case throws a much larger shadow, and at
+    // the old strength it read as a hard slab beside the board.
+    new ShadowMaterial({ opacity: 0.34, transparent: true }),
   );
   shadowPlane.rotation.x = -Math.PI / 2;
   shadowPlane.position.y = -CASE_H / 2 - 0.01;
