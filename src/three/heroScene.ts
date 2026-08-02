@@ -60,9 +60,15 @@ const rowTilt = (z: number, depth: number): number => (z / depth) * -0.5;
 const S = 1 / KEY_U;
 /** Keycap height, and how far the cap sits above the case top. */
 const CAP_H = 0.42;
-const CASE_H = 1.05;
+const CASE_H = 2.1;
 /** Extra case beyond the key field, on every side. The visible black frame. */
 const BEZEL = 0.3;
+/**
+ * Width of the bright turn-over along the case's top edge, in world units.
+ * Absolute rather than a fraction of case height: a chamfer is a machined edge
+ * of fixed size, so it must not grow when the case gets deeper.
+ */
+const CHAMFER = 0.08;
 
 export interface HeroScene {
   resize: (width: number, height: number) => void;
@@ -82,7 +88,7 @@ function chamferColor(hex: string) {
   const body = new Color(hex);
   const edge = body.clone().lerp(new Color(0xffffff), 0.22);
   // positionLocal.y runs -CASE_H/2..CASE_H/2; the top sliver is the chamfer.
-  const ramp = smoothstep(float(CASE_H * 0.38), float(CASE_H * 0.5), positionLocal.y);
+  const ramp = smoothstep(float(CASE_H / 2 - CHAMFER), float(CASE_H / 2), positionLocal.y);
   return mix(color(body), color(edge), ramp);
 }
 
