@@ -229,7 +229,7 @@ export async function createHeroScene(
   scene.environment = env;
   // Below 1 so the room lifts the walls without washing out the studio rig's
   // directional modelling, which is what gives the case its form.
-  scene.environmentIntensity = 0.7;
+  scene.environmentIntensity = 0.5;
 
   const board = buildBoard(layout);
   const boardW = board.widthPx * S;
@@ -399,8 +399,8 @@ export async function createHeroScene(
   const stage = (x: number, y: number, z: number) =>
     new Vector3(x, y, z).normalize().multiplyScalar(STAGE_DISTANCE);
 
-  const keyPos = stage(-5, 7.5, 5);
-  const key = new DirectionalLight(0xfff4e8, 3.4);
+  const keyPos = stage(-5.5, 5.4, 3.6);
+  const key = new DirectionalLight(0xfff1e2, 5.2);
   key.position.copy(keyPos);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
@@ -414,11 +414,11 @@ export async function createHeroScene(
   key.shadow.camera.top = shadowExtent;
   key.shadow.camera.bottom = -shadowExtent;
   key.shadow.bias = -0.002;
-  key.shadow.radius = 8;
+  key.shadow.radius = 3;
   scene.add(key);
 
-  const kicker = new DirectionalLight(0x9fc4ff, 2.2);
-  kicker.position.copy(stage(6, 2.6, -6));
+  const kicker = new DirectionalLight(0xffd7bd, 3.2);
+  kicker.position.copy(stage(6.5, 1.1, -6.5));
   scene.add(kicker);
 
   // Front fill, roughly along the camera axis and deliberately weak. The key
@@ -427,14 +427,14 @@ export async function createHeroScene(
   // and the one that reads as the case's thickness. Without this the wall is
   // carried entirely by the environment's horizon band. No shadow: this is
   // filling shadow, not making more of it.
-  const fillFront = new DirectionalLight(0xdfe6f2, 2.4);
+  const fillFront = new DirectionalLight(0xf3e2d8, 0.9);
   fillFront.position.copy(stage(0.5, 1.6, 6));
   scene.add(fillFront);
 
   // Ground colour was 0x0b0b0d — the old page background, copied in as a
   // literal. On a blush page the board is standing on a lit surface, so the
   // bounce coming back up at it is warm and bright, not black.
-  const fill = new HemisphereLight(0xfff4ec, 0xe0c3b2, 0.75);
+  const fill = new HemisphereLight(0xfff4ec, 0xe0c3b2, 0.42);
   scene.add(fill);
 
   // --- backdrop -------------------------------------------------------------
@@ -466,19 +466,29 @@ export async function createHeroScene(
     // (|u-0.5| = 0.38 of 0.5) so the sweep never reveals its own geometry.
     // A broad plateau before the falloff starts, so the sweep is a lit wall
     // with a soft edge rather than a small bright dot lost in a long gradient.
-    const pool = smoothstep(float(0.14), float(0.38), d).oneMinus();
-    // Warm, and *brighter* than the blush page rather than darker. On the dark
-    // theme this was a pool of light lifting the board off a black page; the
-    // same trick on a light page has to work the other way round or it becomes
-    // a grey smudge behind the product. Here the sweep is a hot spot blooming
-    // out of the page colour, which is what the falloff to transparent then
-    // dissolves back into.
-    backdropMat.colorNode = mix(color(0xf6e3d8), color(0xfffdfb), pool);
+    // Two ramps, not one, and this is where the drama comes from. On a dark
+    // page a single ramp is enough, because the falloff runs into black and
+    // black is already the darkest thing available. On a light page there is
+    // nothing below the page colour to fall off *into*, so a lone ramp lands
+    // somewhere between blush and white and reads as bland no matter how it is
+    // tuned. The range has to be manufactured: a hot core well above the page,
+    // and a deep rose ring well below it, with the board sitting across the
+    // boundary.
+    //
+    // `pool` carries the colour and closes early; `veil` carries the alpha and
+    // closes later. That gap is the ring — colour has already reached deep rose
+    // while opacity is still up, so it prints — and the ring is what a studio
+    // shot's vignette actually is.
+    const pool = smoothstep(float(0.05), float(0.32), d).oneMinus();
+    const veil = smoothstep(float(0.24), float(0.4), d).oneMinus();
+    backdropMat.colorNode = mix(color(0xe2bba8), color(0xfffdfb), pool);
     // Fades to fully transparent well inside the plane's edges, so the sweep
     // dissolves into the page background instead of ending on a visible seam.
     // The canvas is alpha-blended over the page, so this has to be opacity —
     // matching the page colour here would break the moment the page restyles.
-    backdropMat.opacityNode = pool;
+    // Closing at 0.4 of the plane keeps it inside the frame: the plane is
+    // scaled to 2.4x the visible half-extent, so 0.4 lands at 0.96 of it.
+    backdropMat.opacityNode = veil;
   }
   const BACKDROP_Z = -30;
   const backdrop = new Mesh(backdropGeom, backdropMat);
@@ -500,7 +510,7 @@ export async function createHeroScene(
     // neutral black shadow on it reads as a dirty grey cut-out. Lighter than
     // the dark theme's 0.46 too: the same density that grounded the board on
     // black looks like a bruise on blush.
-    new ShadowMaterial({ color: 0x6b4436, opacity: 0.3, transparent: true }),
+    new ShadowMaterial({ color: 0x6b4436, opacity: 0.44, transparent: true }),
   );
   shadowPlane.rotation.x = -Math.PI / 2;
   shadowPlane.position.y = -CASE_H / 2 - 0.01;
@@ -521,12 +531,21 @@ export async function createHeroScene(
    */
   const ELEVATION = 0.62;
   /**
-   * Breathing room around the board inside the frame. Slightly tighter than 1.0
-   * to buy back the on-screen legend size the thicker case costs.
+   * Breathing room around the board inside the frame. Above 1.0, because the
+   * fit it multiplies is exact: anything below 1 is a crop, not a tighter shot.
+   * It read as safe only while the old worst-case diagonal fit was inflating
+   * the vertical term enough to hide it — once the width became the binding
+   * axis, 0.95 cut the board off at both edges.
    */
-  const PADDING = 0.95;
+  const PADDING = 1.08;
   /** Largest yaw the pointer and idle drift can reach, combined. */
   const MAX_YAW = 0.3;
+
+  /** Frustum angles, cached by `placeCamera` for the per-frame refit. */
+  let fovH = 0;
+  let fovV = 0;
+  /** Eased camera distance, so the dolly is a move rather than a jump. */
+  let camDist = 0;
 
   const placeCamera = (width: number, height: number) => {
     const aspect = width / Math.max(height, 1);
@@ -539,33 +558,55 @@ export async function createHeroScene(
     const vFov = (camera.fov * Math.PI) / 180;
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
 
-    // Fit the board at *any* yaw, not at rest. Solving for the resting pose
-    // lets it swing past the canvas edge as soon as it turns, which is exactly
-    // when someone is looking at it — and since drag-to-turn is unbounded, the
-    // worst case is the footprint's diagonal.
-    //
-    // This costs almost nothing here: `caseW` dwarfs `caseD`, so the diagonal
-    // (18.2) is barely wider than the old MAX_YAW box (18.16). Free rotation
-    // was effectively already paid for.
-    const yawed = Math.hypot(caseW, caseD);
-    const yawedW = yawed;
-    const yawedD = yawed;
+    fovH = hFov;
+    fovV = vFov;
+    camera.updateProjectionMatrix();
+    frameCamera(root.rotation.y, true);
+  };
+
+  /**
+   * How far back the camera has to sit to frame the board at a given yaw.
+   *
+   * Solved per yaw rather than once for the worst case. Fitting the *diagonal*
+   * — the pose at 45 degrees — does keep every rotation on screen, but it is
+   * only free on the width axis, where `caseW` already dwarfs `caseD`. On the
+   * depth axis it is not remotely free: the rotated footprint goes from 11.2
+   * deep at rest to 18.2 at the diagonal, and depth is what drives the vertical
+   * fit, so a fixed worst-case fit pushes the camera ~50% further back and
+   * shrinks the board — including the legends — in the shot nobody has touched
+   * yet. Almost every viewer sees only the resting pose, so the resting pose is
+   * what should be framed tightly.
+   */
+  const distanceForYaw = (yaw: number) => {
+    const c = Math.abs(Math.cos(yaw));
+    const s = Math.abs(Math.sin(yaw));
+    const yawedW = caseW * c + caseD * s;
+    const yawedD = caseD * c + caseW * s;
     const projectedH =
       yawedD * Math.cos(ELEVATION) + (CASE_H + CAP_H) * Math.sin(ELEVATION);
-
-    const distance =
+    return (
       Math.max(
-        yawedW / 2 / Math.tan(hFov / 2),
-        projectedH / 2 / Math.tan(vFov / 2),
-      ) * PADDING;
+        yawedW / 2 / Math.tan(fovH / 2),
+        projectedH / 2 / Math.tan(fovV / 2),
+      ) * PADDING
+    );
+  };
+
+  /**
+   * Places the camera for the current yaw, easing unless `snap`. The ease is
+   * what makes the dolly read as a camera pulling back to keep the subject in
+   * frame rather than as the board shrinking.
+   */
+  const frameCamera = (yaw: number, snap = false) => {
+    const target = distanceForYaw(yaw);
+    camDist = snap ? target : camDist + (target - camDist) * 0.06;
 
     camera.position.set(
       0,
-      distance * Math.sin(ELEVATION),
-      distance * Math.cos(ELEVATION),
+      camDist * Math.sin(ELEVATION),
+      camDist * Math.cos(ELEVATION),
     );
     camera.lookAt(focus);
-    camera.updateProjectionMatrix();
 
     // Centre the sweep on the frame, not on the board: follow the view axis to
     // where it crosses the backdrop plane. Biased a little above that so the
@@ -582,17 +623,17 @@ export async function createHeroScene(
 
     // Size the sweep to the frustum where it actually sits, so its falloff is
     // measured against what the viewer can see. 2.4x the visible half-extent
-    // puts the pool's outer edge — it reaches zero at 0.38 of the plane — just
+    // puts the pool's outer edge — it reaches zero at 0.4 of the plane — just
     // inside the frame, so the sweep dissolves before the canvas boundary does.
+    // Re-derived here rather than in `placeCamera` because the camera now moves
+    // with the board, and a sweep sized for one distance tears at another.
     const reach = camera.position.distanceTo(backdrop.position);
-    const halfW = reach * Math.tan(hFov / 2);
-    const halfH = reach * Math.tan(vFov / 2);
     backdrop.scale.set(
-      halfW * 2.4,
+      reach * Math.tan(fovH / 2) * 2.4,
       // The sweep is vertical and the camera looks down on it, so its height
       // is foreshortened; undo that or the pool ends up an ellipse lying on
       // its side rather than the round-ish glow it is in the plane's own space.
-      (halfH * 2.4) / Math.cos(ELEVATION),
+      (reach * Math.tan(fovV / 2) * 2.4) / Math.cos(ELEVATION),
       1,
     );
   };
@@ -652,6 +693,12 @@ export async function createHeroScene(
       root.rotation.x =
         -0.02 + tilt + pointer.y * 0.12 + Math.cos(clock.t * 0.8) * 0.015;
     }
+
+    // Refit for however the board is currently turned. Cheap — a handful of
+    // trig — and it is what lets the resting pose be framed tightly while a
+    // dragged-to-45-degrees pose still fits.
+    frameCamera(root.rotation.y);
+
     renderer.render(scene, camera);
   };
   render();

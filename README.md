@@ -90,6 +90,23 @@ whereas both the diffuse and the metal F0 of Anodized Black (`#1C1C1E`) are
 near zero. On a black case the clearcoat is effectively the only thing putting
 light on a wall that faces away from the key light.
 
+### The camera refits every frame
+
+`distanceForYaw` is solved for the board's *current* rotation and eased toward,
+rather than fixed once at the worst case. Fitting the diagonal — the pose at 45
+degrees — does keep every rotation on screen, and it is genuinely free on the
+width axis, where `caseW` already dwarfs `caseD`. It is not free on the depth
+axis: the rotated footprint goes from 11.2 deep at rest to 18.2 at the diagonal,
+and depth drives the *vertical* fit, so a fixed worst-case fit pushes the camera
+about 50% further back and shrinks the board — legends included — in the shot
+almost every viewer actually sees. So the resting pose is framed tightly and the
+camera dollies back only as the board is turned.
+
+`PADDING` must stay **above 1.0**. It multiplies an exact fit, so anything below
+1 is a crop rather than a tighter shot. It sat at 0.95 undetected for a while
+because the inflated vertical term was masking it; the moment width became the
+binding axis, it cut the board off at both edges.
+
 ### Case height is set in millimetres
 
 One scene unit is one key unit, which is the **19.05mm keycap pitch**. `CASE_H`
@@ -115,8 +132,16 @@ shot comes from. Case *height* does not produce depth — it adds a large area o
 uniform colour, which is the opposite of a depth cue. Value separation between
 planes does.
 
-Two things about it are computed in `placeCamera` rather than written as
-constants, both because a constant was wrong:
+Its falloff is **two ramps, not one**. Colour closes early and alpha closes
+later, and the gap between them prints a deep-rose ring — which is what a
+studio vignette actually is. On a dark page one ramp is enough, because the
+falloff runs into black and black is already the darkest thing available; on a
+light page there is nothing below the page colour to fall off *into*, so a lone
+ramp lands somewhere between blush and white and reads as bland however it is
+tuned. The range has to be manufactured.
+
+Two things about it are computed per frame rather than written as constants,
+both because a constant was wrong:
 
 - **Its size** comes from the frustum at the plane's depth. The pool has to
   reach zero inside the *canvas*, and the canvas edge is set by the viewport,
