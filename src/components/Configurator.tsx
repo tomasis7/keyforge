@@ -75,13 +75,18 @@ export function Configurator() {
           Configure yours
         </h2>
         <div className="configurator-grid" data-reveal-group>
-          {/* Options first: they are what you act on. The board follows as the
-              result, docked to the bottom of the viewport while you scroll so
-              it stays in sight without leading the section. */}
-          <OptionsPanel />
+          {/* Board first, and on the left. It is what you are editing, so it
+              leads; the options read as the controls acting on it rather than a
+              form the board happens to follow.
+              Order is also what makes it stick. Sticky only holds an element
+              inside its own containing block, and a *trailing* element has no
+              travel left to be held against — which is why the board could not
+              be pinned while it sat after the options. First in the row, it
+              has the whole column to travel through. */}
           <div className="configurator-viewer" data-reveal ref={viewerRef}>
             <KeyboardSVG layout={layout} caseOption={caseOption} colorway={colorway} />
           </div>
+          <OptionsPanel />
         </div>
       </div>
       <PriceBar onReview={() => setSummaryOpen(true)} />

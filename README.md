@@ -125,33 +125,25 @@ toward white. On an 18mm case the bezel is most of the case you can see, which
 made Anodized Black render as silver. Measured, that one ramp was worth ~82 of
 the bezel's 146 luminance: more than the environment and every light combined.
 
-### Floor stays, plinth turns
+### The surface is an object, not a background
 
-The set splits in two, and the split carries the meaning. The **floor** belongs
-to the set and stays put; the **plinth** belongs to the product and is parented
-to `root`, so it turns with the board.
+The board stands on a grey slab that is parented to `root`, so it turns with
+the board. That is the whole trick: a surface travelling with the product is in
+permanent contact with it at any rotation, because it is part of the same
+object.
 
-That is what makes dragging read as turning an object over rather than swinging
-a camera around one. A board rotating on a floor that stays still is a camera
-move. A board rotating with the slab it stands on is an object on a turntable —
-and the shadow sweeping across the floor underneath is what sells it.
+It replaced a ground plane, which could not do the job for two reasons. A floor
+that defines a horizon has to be short behind the subject and long in front of
+it, and a shape like that cannot be rotated — turn it about Y and the horizon
+swings across the frame. And a *static* floor under a board that pitches about
+the origin means the board's front edge drops through it: a fifth of a radian
+of tilt was enough to cut the case in half.
 
-It also changes what the camera has to frame: `distanceForYaw` solves for the
-*plinth's* footprint, not the case's, because the slab oversails the board on
-every side and turns with it. Framing the case alone let the slab's corners
-swing out of shot on exactly the drag that shows it off.
+The camera frames the slab rather than the case, since it oversails the board
+on every side and turns with it — framing the case alone let its corners swing
+out of shot on exactly the drag that shows it off.
 
-Four surfaces, four steps of value, darkest to lightest: board, wall, floor,
-plinth. That stack is the whole composition.
-
-`FLOOR_Y` has to account for everything stacked on it, which is easy to get
-wrong when the stack changes. While the floor *was* the surface the board stood
-on, `-CASE_H / 2` was right. Once the plinth went in between, that same value
-put the floor plane straight through the slab — burying its sides and leaving
-only its top face poking 0.01 above, so the plinth read as a sheet of paper
-under the board rather than a block it stands on.
-
-### The set: wall, horizon, floor
+### The backdrop
 
 The hero is a two-colour set — a sky wall and a warm table meeting at a horizon
 — and three things about it are less obvious than they look.

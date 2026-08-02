@@ -168,7 +168,10 @@ body {
 
 .hero-board-stage {
   position: relative;
-  aspect-ratio: 21 / 10;
+  aspect-ratio: 16 / 9;
+  /* Dominant rather than a band. The set — wall, horizon, floor — needs height
+     to read as a room; at 21/10 the wall was a stripe above the board. */
+  min-height: 78vh;
   /* Full bleed. The scene now paints an opaque wall and table rather than
      compositing a transparent board over the page, so the stage has to run to
      the viewport edges — boxed to `--container` it would draw its own framed
@@ -237,17 +240,15 @@ body {
 }
 
 .configurator-grid {
-  /* Stacked rather than side by side. The options column is far taller than the
-     board, so a two-column layout left a tall empty gutter under the board and
-     squeezed the board into half the page. Full width gives the board roughly
-     twice the size and lets the options spread into their own grid below. */
-  /* Flex rather than grid: a grid item's containing block is its own row, so
-     a sticky child has no room to travel and never pins. In a flex column the
-     containing block is the whole container, which is what lets the board lift
-     up over the options while you scroll them. */
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
+  /* Board left, options right. The board leads because it is the thing being
+     edited, and putting it first is also what lets it stick: sticky holds an
+     element inside its own containing block, and a trailing element has no
+     travel left to be held against. First in the row, it has the whole options
+     column to travel through. */
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: var(--space-12);
+  align-items: start;
 }
 
 .configurator-viewer {
@@ -255,24 +256,25 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: var(--space-8);
-  /* The options column is long; without this the board scrolls away and you are
-     changing a keyboard you cannot see. Sticky also gives the exit layer its
-     positioning context (see animations/keyboard.ts), and align-self keeps the
-     box its own height rather than being stretched to the grid row. */
-  /* Not sticky. The board now sits after the options, and sticky can only hold
-     an element inside its own containing block — a trailing element's natural
-     position is already at the end, so there is no travel and it never pins.
-     Keeping the board visible while scrolling the menu would mean putting it
-     first again. Position (for the exit layer) comes from relative instead. */
-  position: relative;
+  /* Sticky, which only works now that the board is *first* in the row. Sticky
+     holds an element inside its own containing block, and a trailing element
+     has no travel left to be held against — which is why this could not pin
+     while the board sat after the options. First in a two-column row, its
+     containing block is the row, and the row is as tall as the options column
+     beside it, so it has the whole list to travel through. You are never
+     editing a keyboard you cannot see.
+
+     Also gives the exit layer its positioning context; see
+     animations/keyboard.ts. */
+  position: sticky;
+  top: var(--space-8);
 }
 
-/* Full width, so the board is roughly twice the size it was in the old two
-   column layout. Capped by height because it is pinned: without this it would
-   own most of the viewport and leave nothing to scroll the options through. */
+/* Capped by height because it is pinned: without this it would own most of the
+   viewport and leave nothing to scroll the options through. */
 .configurator-viewer .board {
   max-width: 100%;
-  max-height: 52vh;
+  max-height: 46vh;
 }
 
 /* Ghost copies of keys the new layout dropped. Created and removed entirely by
@@ -285,6 +287,13 @@ body {
 @media (max-width: 1024px) {
   .configurator-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Nothing to stick against once the columns collapse: the board and options
+     are in one flow, so pinning would just park the board over them. */
+  .configurator-viewer {
+    position: relative;
+    top: auto;
   }
 }
 
