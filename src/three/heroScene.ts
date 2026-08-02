@@ -43,6 +43,11 @@ const LEGEND_KEY: Record<Zone, 'onAlpha' | 'onMod' | 'onAccent'> = {
 
 /** How far the caps sit down into the case tray. */
 const SEAT = 0.1;
+/** Above this width a key is a modifier, and takes a left-aligned legend. */
+const WIDE_KEY_U = 1.4;
+/** Rendered width of a legend quad, and its inset from a wide cap's edge. */
+const LEGEND_W = 0.5;
+const LEGEND_INSET = 0.12;
 /**
  * Row sculpting. Far rows lean back and near rows lean forward, which is why a
  * real board's rows catch the light at different angles rather than reading as
@@ -231,15 +236,21 @@ export async function createHeroScene(
       // up toward its edges, so a legend placed at the dish floor is swallowed
       // by the cap everywhere except dead centre.
       const lift = CAP_H / 2 + 0.01;
+      // Wide modifiers carry their legend at the left, the way tab, caps and
+      // shift do on a real board; alphas stay centred. Without this every wide
+      // key has a lonely glyph floating in the middle of a long cap.
+      const capW = k.bw * S;
+      const shift =
+        capW > WIDE_KEY_U ? -(capW / 2) + LEGEND_W / 2 + LEGEND_INSET : 0;
       dummy.position.set(
-        (k.bx + k.bw / 2) * S - boardW / 2,
+        (k.bx + k.bw / 2) * S - boardW / 2 + shift,
         CASE_H / 2 + CAP_H / 2 - SEAT + lift * Math.cos(tilt),
         z + lift * Math.sin(tilt),
       );
       // Lies on the cap's sloped top, not flat on the board.
       dummy.rotation.set(-Math.PI / 2 + tilt, 0, 0);
       // Uniform, so a 6.25u space bar gets the same lettering as a 1u alpha.
-      dummy.scale.set(0.5, 0.5, 1);
+      dummy.scale.set(LEGEND_W, LEGEND_W, 1);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     });
@@ -291,7 +302,7 @@ export async function createHeroScene(
   /** Elevation of the camera above the desk, in radians. A 3/4 product angle. */
   const ELEVATION = 0.68;
   /** Breathing room around the board inside the frame. */
-  const PADDING = 1.08;
+  const PADDING = 1.0;
   /** Largest yaw the pointer and idle drift can reach, combined. */
   const MAX_YAW = 0.3;
 

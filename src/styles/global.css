@@ -172,8 +172,8 @@ body {
 
 .hero-board-stage {
   position: relative;
-  aspect-ratio: 2 / 1;
-  max-width: calc(var(--container) * 0.86);
+  aspect-ratio: 21 / 10;
+  max-width: var(--container);
   margin-inline: auto;
 }
 
