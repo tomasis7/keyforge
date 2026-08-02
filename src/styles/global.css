@@ -225,9 +225,13 @@ body {
 }
 
 .configurator-grid {
+  /* Stacked rather than side by side. The options column is far taller than the
+     board, so a two-column layout left a tall empty gutter under the board and
+     squeezed the board into half the page. Full width gives the board roughly
+     twice the size and lets the options spread into their own grid below. */
   display: grid;
-  grid-template-columns: 7fr 5fr;
-  gap: var(--space-12);
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
   align-items: start;
 }
 
@@ -241,8 +245,16 @@ body {
      positioning context (see animations/keyboard.ts), and align-self keeps the
      box its own height rather than being stretched to the grid row. */
   position: sticky;
-  top: var(--space-8);
+  top: var(--space-6);
   align-self: start;
+}
+
+/* Full width, so the board is roughly twice the size it was in the old two
+   column layout. Capped by height because it is pinned: without this it would
+   own most of the viewport and leave nothing to scroll the options through. */
+.configurator-viewer .board {
+  max-width: 100%;
+  max-height: 46vh;
 }
 
 /* Ghost copies of keys the new layout dropped. Created and removed entirely by
@@ -270,12 +282,16 @@ body {
 /* --- Options panel --- */
 
 .options-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
+  /* Full width now, so the groups flow into columns instead of one long
+     stack of very wide cards. */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-6);
+  align-items: start;
 }
 
 .options-header {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -308,9 +324,7 @@ body {
 }
 
 .extras {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
+  display: contents;
 }
 
 /* --- Visually hidden radios (focusable, keyboard operable) --- */

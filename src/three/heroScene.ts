@@ -31,6 +31,7 @@ import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, WebGPURenderer } from 
 import type { LayoutId } from '../data/layouts';
 import type { CaseOption, ColorwayOption } from '../data/options';
 import { buildBoard, KEY_U, type Zone } from '../lib/keyboard';
+import { keycapGeometry } from './keycap';
 import { buildLegendAtlas } from './legendAtlas';
 
 /** Which ink colour each zone's legends use. */
@@ -39,6 +40,15 @@ const LEGEND_KEY: Record<Zone, 'onAlpha' | 'onMod' | 'onAccent'> = {
   mod: 'onMod',
   accent: 'onAccent',
 };
+
+/** How far the caps sit down into the case tray. */
+const SEAT = 0.1;
+/**
+ * Row sculpting. Far rows lean back and near rows lean forward, which is why a
+ * real board's rows catch the light at different angles rather than reading as
+ * one flat field.
+ */
+const rowTilt = (z: number, depth: number): number => (z / depth) * -0.5;
 
 /** SVG pixels to scene units. One key unit (48px) becomes 1. */
 const S = 1 / KEY_U;
@@ -141,7 +151,7 @@ export async function createHeroScene(
   // Three draw calls and three flat materials, rather than per-instance colour:
   // the zones are the only colour variation the board has.
   const zones: Zone[] = ['alpha', 'mod', 'accent'];
-  const capGeom = new RoundedBoxGeometry(1, CAP_H, 1, 3, 0.09);
+  const capGeom = keycapGeometry(CAP_H);
   const capMeshes = new Map<Zone, InstancedMesh>();
   const dummy = new Object3D();
 
@@ -152,15 +162,23 @@ export async function createHeroScene(
     mesh.receiveShadow = true;
     keys.forEach((key, i) => {
       // SVG space is y-down and origin top-left; the scene is y-up, centred.
+      const z = (key.by + key.bh / 2) * S - boardD / 2;
       dummy.position.set(
         (key.bx + key.bw / 2) * S - boardW / 2,
-        CASE_H / 2 + CAP_H / 2 - 0.06,
-        (key.by + key.bh / 2) * S - boardD / 2,
+        // Seated *into* the tray rather than resting on a slab, so the case
+        // rim rises past the base of the caps as it does on a real board.
+        CASE_H / 2 + CAP_H / 2 - SEAT,
+        z,
       );
+      // Row sculpting: the far rows lean back toward the user and the near
+      // rows lean forward, which is why a real board's rows catch the light
+      // at different angles instead of reading as one flat field.
+      dummy.rotation.set(rowTilt(z, boardD), 0, 0);
       dummy.scale.set(key.bw * S, 1, key.bh * S);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     });
+    dummy.rotation.set(0, 0, 0);
     mesh.instanceMatrix.needsUpdate = true;
     capMeshes.set(zone, mesh);
     root.add(mesh);
@@ -204,14 +222,24 @@ export async function createHeroScene(
 
     const mesh = new InstancedMesh(geometry, material, keys.length);
     keys.forEach((k, i) => {
+      const z = (k.by + k.bh / 2) * S - boardD / 2;
+      const tilt = rowTilt(z, boardD);
+      // Placed on the cap's actual top surface rather than at a fixed height:
+      // the caps are both seated into the tray and tilted per row, so a fixed
+      // Y buries the legend inside the cap it belongs to.
+      // Clears the *rim*, not the dish floor. The dish curves the cap surface
+      // up toward its edges, so a legend placed at the dish floor is swallowed
+      // by the cap everywhere except dead centre.
+      const lift = CAP_H / 2 + 0.01;
       dummy.position.set(
         (k.bx + k.bw / 2) * S - boardW / 2,
-        CASE_H / 2 + CAP_H - 0.055,
-        (k.by + k.bh / 2) * S - boardD / 2,
+        CASE_H / 2 + CAP_H / 2 - SEAT + lift * Math.cos(tilt),
+        z + lift * Math.sin(tilt),
       );
-      dummy.rotation.set(-Math.PI / 2, 0, 0);
+      // Lies on the cap's sloped top, not flat on the board.
+      dummy.rotation.set(-Math.PI / 2 + tilt, 0, 0);
       // Uniform, so a 6.25u space bar gets the same lettering as a 1u alpha.
-      dummy.scale.set(0.62, 0.62, 1);
+      dummy.scale.set(0.5, 0.5, 1);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     });
