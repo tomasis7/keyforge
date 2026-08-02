@@ -13,30 +13,39 @@
   /* Height of the sticky price bar, so other docked elements can clear it. */
   --price-bar-h: 100px;
 
-  /* --- Color: surfaces (light, warm blush studio) ---
-     A lit studio sweep rather than a neutral page: the surfaces warm *up* as
-     they recede (bg-0 is the deepest blush, panels come forward to white), so
-     a card reads as being nearer the light rather than as a lighter grey.
-     Every surface carries some red — a neutral grey next to these reads green
-     by comparison, which is why none of them are desaturated. */
-  --bg-0: #F2E4DC;              /* page background */
-  --bg-1: #FAF0EA;              /* alternating section background */
-  --bg-2: #FFFFFF;              /* card / panel */
-  --bg-3: #FFF8F4;              /* raised control */
-  /* Warm dark hairlines. Inverted from the white ones this had: on a light
-     surface a translucent white line is invisible. */
-  --line: rgba(58, 38, 30, 0.14);
-  --line-strong: rgba(58, 38, 30, 0.26);
+  /* --- Color: surfaces (sky studio) ---
+     Two colours, the way the hero's set is: a sky the page is painted in, and
+     a warm off-white "table" the content sits on. bg-0 matches the 3D wall
+     exactly (0x8FCBE8) so the full-bleed canvas has no seam where it ends, and
+     the panels are the table — which is what makes a card read as an object
+     standing on the surface rather than a lighter patch of sky. */
+  --bg-0: #8FCBE8;              /* page background — same as the 3D wall */
+  --bg-1: #A9D9EF;              /* alternating section background */
+  --bg-2: #F7F2EA;              /* card / panel — the table colour */
+  --bg-3: #FFFDF8;              /* raised control */
+  /* Dark hairlines, cooled to sit in the blue. Inverted from the white ones
+     this started with: on a light surface a translucent white line is
+     invisible. */
+  --line: rgba(16, 42, 56, 0.16);
+  --line-strong: rgba(16, 42, 56, 0.3);
 
   /* --- Color: text ---
-     Warm near-black rather than pure black, so text sits *in* the blush
-     instead of punching a neutral hole through it. */
-  --text-1: #241C18;            /* headings, primary text */
-  --text-2: #6B5A52;            /* secondary body text */
-  --text-3: #9B8880;            /* captions, disabled */
+     Deep blue-black rather than pure black, so text sits *in* the sky instead
+     of punching a neutral hole through it. Dark enough to clear AA on bg-0 as
+     well as on the panels, since headings run straight over the sky. */
+  --text-1: #0E2230;            /* headings, primary text */
+  --text-2: #24404E;            /* secondary body text */
+  --text-3: #35505F;            /* captions, disabled */
 
   /* --- Color: accent (burnt orange) --- */
   --accent: #E4572E;
+  /* Accent for *text*. The accent itself can never clear AA as type on the sky:
+     orange and mid sky-blue sit at almost the same luminance, and the maths
+     says the background would have to be near-white for #E4572E to reach 4.5:1.
+     So type that wants to read as "accent" uses this darker burn instead, and
+     --accent stays for fills, where it is a background rather than a
+     foreground. 4.63:1 on bg-0, 7.34:1 on a panel. */
+  --accent-ink: #8A3316;
   --accent-hover: #F0683C;
   --accent-soft: rgba(228, 87, 46, 0.14);
   --on-accent: #14100D;
@@ -74,12 +83,12 @@
   --r-pill: 999px;
 
   /* --- Elevation --- */
-  /* Warm and soft. The 0.4/0.45 blacks these were are a dark theme's shadows,
-     where a shadow is really a *darker hole*; on a lit blush surface that reads
-     as grime under the card. A studio shadow on a warm ground is a low-opacity
-     warm brown with a wide spread. */
-  --shadow-1: 0 1px 2px rgba(90, 52, 38, 0.10);
-  --shadow-2: 0 10px 34px rgba(90, 52, 38, 0.16);
+  /* Cool and soft. The 0.4/0.45 blacks these started as are a dark theme's
+     shadows, where a shadow is really a *darker hole*; on a lit surface that
+     reads as grime under the card. A studio shadow on a blue ground is a
+     low-opacity blue-black with a wide spread. */
+  --shadow-1: 0 1px 2px rgba(12, 36, 50, 0.12);
+  --shadow-2: 0 12px 36px rgba(12, 36, 50, 0.20);
 
   /* --- Motion (mirror these exact values in GSAP timelines) --- */
   --d-fast: 150ms;

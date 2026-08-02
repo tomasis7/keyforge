@@ -55,7 +55,7 @@ body {
 }
 
 .wordmark-dot {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* --- Buttons --- */
@@ -113,7 +113,7 @@ body {
   font-size: var(--fs-label);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .hero-title {
@@ -126,7 +126,7 @@ body {
 }
 
 .accent-dot {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .word {
@@ -154,13 +154,9 @@ body {
 .hero-board {
   margin-top: var(--space-12);
   perspective: 1200px;
-  /* The pool of light the board sits in. Kept behind both the SVG and the
-     canvas so the studio backdrop reads the same either way. */
-  background: radial-gradient(
-    ellipse 70% 60% at 50% 40%,
-    color-mix(in srgb, var(--bg-2) 60%, transparent),
-    transparent 70%
-  );
+  /* No CSS pool any more. The 3D scene paints its own wall and table, edge to
+     edge, and a gradient behind it would show through wherever the two
+     disagreed. The SVG fallback keeps the page background instead. */
 }
 
 .hero-board .board {
@@ -173,8 +169,14 @@ body {
 .hero-board-stage {
   position: relative;
   aspect-ratio: 21 / 10;
-  max-width: var(--container);
-  margin-inline: auto;
+  /* Full bleed. The scene now paints an opaque wall and table rather than
+     compositing a transparent board over the page, so the stage has to run to
+     the viewport edges — boxed to `--container` it would draw its own framed
+     rectangle of sky in the middle of the page. Breaking out of the centred
+     column rather than being placed by it, hence the viewport-width trick. */
+  width: 100vw;
+  max-width: 100vw;
+  margin-inline: calc(50% - 50vw);
 }
 
 .hero-board-svg,
@@ -662,7 +664,7 @@ body {
   font-size: var(--fs-label);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .material-title,

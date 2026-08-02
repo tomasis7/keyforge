@@ -125,6 +125,35 @@ toward white. On an 18mm case the bezel is most of the case you can see, which
 made Anodized Black render as silver. Measured, that one ramp was worth ~82 of
 the bezel's 146 luminance: more than the environment and every light combined.
 
+### The set: wall, horizon, table
+
+The hero is a two-colour set — a sky wall and a warm table meeting at a horizon
+— and three things about it are less obvious than they look.
+
+The stage is **full bleed** and the wall is **flat `--bg-0`**, not a gradient. A
+cyclorama wants a gradient, but a full-bleed canvas butts straight onto the
+page, so whatever value the wall takes at that join has to equal the page or the
+join draws a visible band across the hero. A gradient made the wall's top
+lighter than the page and did exactly that.
+
+The table is **finite**, and its far edge is solved for per frame. An infinite
+ground plane puts its horizon at eye level, which from a camera looking down 30
+degrees sits far above a 15-degree half-FOV — so an unbounded table fills the
+entire frame and the wall never appears at all. `HORIZON_LIFT` says how far up
+the picture the edge should land and the z is derived from the camera.
+
+The key light is **raked low**. Shadow length follows the light's elevation, and
+the board is 18mm tall: from up near 45 degrees a case that thin drops its
+shadow underneath itself, where the board hides it and the whole thing reads as
+floating. The shadow frustum is sized for the *shadow* rather than the caster,
+too — a raking light throws the shadow well past the board's own footprint, and
+if it reaches the edge of the ortho box the map clamps to an edge texel that
+still holds an occluder, smearing one hard rectangle of false shadow across the
+table.
+
+Shadow *density* is set by ambient, not by any shadow setting: on a lit table
+the shadow is only as dark as the light filling it.
+
 ### Backdrop
 
 A pool of light on a sweep behind the board, which is where the depth in the
@@ -276,6 +305,12 @@ asserts the committed value still matches. Changing the palette without running
 `npm run og` fails the build rather than silently shipping a stale preview.
 
 ## Known gaps
+
+- `--accent` cannot be used as *text* on `--bg-0`. Orange and mid sky-blue sit
+  at nearly the same luminance, and the maths says the background would have to
+  be near-white for `#E4572E` to reach 4.5:1. Type that wants to read as accent
+  uses `--accent-ink` (4.63:1 on the sky, 7.34:1 on a panel); `--accent` stays
+  for fills, where it is a background rather than a foreground.
 
 - **Anodized Black renders lighter than its swatch.** The hero puts the bezel
   around luminance 64 against the swatch's 28.6, because a lit dark surface

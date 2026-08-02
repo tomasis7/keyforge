@@ -47,11 +47,11 @@ export function studioEnvironment(): CanvasTexture {
   // not the black void a dark-page scene could assume. Leaving the floor dark
   // puts a hard dark band across the underside of every cap and along the case
   // wall, which reads as dirt rather than as shading.
-  sweep.addColorStop(0, '#fffaf6');
-  sweep.addColorStop(0.3, '#fbeade');
-  sweep.addColorStop(0.52, '#f0d9cc');
-  sweep.addColorStop(0.76, '#cfb0a0');
-  sweep.addColorStop(1, '#8d6f61');
+  sweep.addColorStop(0, '#fdfefe');
+  sweep.addColorStop(0.3, '#e4f1f8');
+  sweep.addColorStop(0.52, '#cfe6f2');
+  sweep.addColorStop(0.76, '#cdc9bd');
+  sweep.addColorStop(1, '#a89f90');
   ctx.fillStyle = sweep;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 

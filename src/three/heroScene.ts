@@ -22,7 +22,6 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
-  ShadowMaterial,
   Vector2,
   Vector3,
 } from 'three';
@@ -211,10 +210,19 @@ export async function createHeroScene(
   // fragment cost scales with the square of this number for no visible gain on
   // a board made of flat-shaded boxes.
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-  renderer.setClearAlpha(0);
+  // Opaque. The scene paints a full set — wall and table — rather than floating
+  // a board over the page, so there is nothing left for the page to show
+  // through, and a transparent clear would only leak page colour into any gap
+  // the wall plane failed to cover.
+  renderer.setClearAlpha(1);
   renderer.shadowMap.enabled = true;
 
   const scene = new Scene();
+  // Backstop behind the wall plane. The wall is sized to the frustum and should
+  // cover the frame on its own, but it is a finite quad being fitted to a
+  // camera that moves with the board — a clear colour behind it means a gap can
+  // never show as a transparent hole.
+  scene.background = new Color(0x8fcbe8);
   // Far enough to clear the backdrop, which sits well behind the board.
   const camera = new PerspectiveCamera(30, 1, 0.1, 200);
 
@@ -229,7 +237,7 @@ export async function createHeroScene(
   scene.environment = env;
   // Below 1 so the room lifts the walls without washing out the studio rig's
   // directional modelling, which is what gives the case its form.
-  scene.environmentIntensity = 0.5;
+  scene.environmentIntensity = 0.34;
 
   const board = buildBoard(layout);
   const boardW = board.widthPx * S;
@@ -399,7 +407,12 @@ export async function createHeroScene(
   const stage = (x: number, y: number, z: number) =>
     new Vector3(x, y, z).normalize().multiplyScalar(STAGE_DISTANCE);
 
-  const keyPos = stage(-5.5, 5.4, 3.6);
+  // Raked low deliberately. Shadow length is set by the light's elevation, and
+  // the board is only 18mm tall — from up near 45 degrees a case that thin drops
+  // its shadow underneath itself, where the board then hides it and the whole
+  // thing reads as floating. Low and to the side throws the shadow clear across
+  // the table, which on a light set is the strongest depth cue available.
+  const keyPos = stage(-6.2, 3.5, 2.6);
   const key = new DirectionalLight(0xfff1e2, 5.2);
   key.position.copy(keyPos);
   key.castShadow = true;
@@ -408,13 +421,18 @@ export async function createHeroScene(
   key.shadow.camera.far = STAGE_DISTANCE * 2.2;
   // Half-extent of the board as seen from the light. Derived from the case so a
   // future height change cannot silently crop the shadow.
-  const shadowExtent = Math.max(caseW, caseD, CASE_H) * 0.95;
+// Generous, and it has to be. A raking light stretches the board's shadow well
+  // past the board's own footprint, and if that shadow reaches the edge of the
+  // ortho box the map clamps to its edge texel — which still holds an occluder,
+  // so everything beyond smears into one hard rectangle of false shadow across
+  // the table. Sized for the shadow, not for the caster.
+  const shadowExtent = Math.max(caseW, caseD) * 1.7;
   key.shadow.camera.left = -shadowExtent;
   key.shadow.camera.right = shadowExtent;
   key.shadow.camera.top = shadowExtent;
   key.shadow.camera.bottom = -shadowExtent;
   key.shadow.bias = -0.002;
-  key.shadow.radius = 3;
+  key.shadow.radius = 2;
   scene.add(key);
 
   const kicker = new DirectionalLight(0xffd7bd, 3.2);
@@ -427,14 +445,18 @@ export async function createHeroScene(
   // and the one that reads as the case's thickness. Without this the wall is
   // carried entirely by the environment's horizon band. No shadow: this is
   // filling shadow, not making more of it.
-  const fillFront = new DirectionalLight(0xf3e2d8, 0.9);
+  const fillFront = new DirectionalLight(0xf3e2d8, 0.55);
   fillFront.position.copy(stage(0.5, 1.6, 6));
   scene.add(fillFront);
 
   // Ground colour was 0x0b0b0d — the old page background, copied in as a
   // literal. On a blush page the board is standing on a lit surface, so the
   // bounce coming back up at it is warm and bright, not black.
-  const fill = new HemisphereLight(0xfff4ec, 0xe0c3b2, 0.42);
+  // Cut hard. On a lit table the shadow is only as dark as the ambient that
+  // fills it, so shadow density is set here rather than by any shadow setting —
+  // the key light carries the lit surfaces and this decides how far the shadow
+  // falls below them.
+  const fill = new HemisphereLight(0xf2fbff, 0xe8e2d6, 0.22);
   scene.add(fill);
 
   // --- backdrop -------------------------------------------------------------
@@ -457,65 +479,55 @@ export async function createHeroScene(
   // Never occludes the board, and never writes depth the case has to fight.
   backdropMat.depthWrite = false;
   {
-    // Elliptical falloff — wider than tall, so the pool reads as a lamp thrown
-    // across a sweep rather than a circle pasted behind the board.
-    const d = uv().sub(vec2(0.5, 0.5)).mul(vec2(1, 1.5)).length();
-    // Ramped outward and inverted, never `smoothstep(hi, lo, x)`. A reversed
-    // pair is undefined in GLSL, and it showed: the pool clipped to a hard
-    // rectangle instead of falling off. Zero well inside the plane's edges
-    // (|u-0.5| = 0.38 of 0.5) so the sweep never reveals its own geometry.
-    // A broad plateau before the falloff starts, so the sweep is a lit wall
-    // with a soft edge rather than a small bright dot lost in a long gradient.
-    // Two ramps, not one, and this is where the drama comes from. On a dark
-    // page a single ramp is enough, because the falloff runs into black and
-    // black is already the darkest thing available. On a light page there is
-    // nothing below the page colour to fall off *into*, so a lone ramp lands
-    // somewhere between blush and white and reads as bland no matter how it is
-    // tuned. The range has to be manufactured: a hot core well above the page,
-    // and a deep rose ring well below it, with the board sitting across the
-    // boundary.
-    //
-    // `pool` carries the colour and closes early; `veil` carries the alpha and
-    // closes later. That gap is the ring — colour has already reached deep rose
-    // while opacity is still up, so it prints — and the ring is what a studio
-    // shot's vignette actually is.
-    const pool = smoothstep(float(0.05), float(0.32), d).oneMinus();
-    const veil = smoothstep(float(0.24), float(0.4), d).oneMinus();
-    backdropMat.colorNode = mix(color(0xe2bba8), color(0xfffdfb), pool);
-    // Fades to fully transparent well inside the plane's edges, so the sweep
-    // dissolves into the page background instead of ending on a visible seam.
-    // The canvas is alpha-blended over the page, so this has to be opacity —
-    // matching the page colour here would break the moment the page restyles.
-    // Closing at 0.4 of the plane keeps it inside the frame: the plane is
-    // scaled to 2.4x the visible half-extent, so 0.4 lands at 0.96 of it.
-    backdropMat.opacityNode = veil;
+    // Flat, and exactly `--bg-0`. It is tempting to give the wall a gradient —
+    // a real cyclorama has one — but the canvas is full bleed and butts
+    // straight onto the page, so any value the wall takes at that join has to
+    // equal the page or the join becomes a visible band across the hero. A
+    // gradient made the wall's top lighter than the page and drew exactly that
+    // line. The set already reads as two colours; the second one is the table.
+    backdropMat.colorNode = color(0x8fcbe8);
+    // Opaque. Everything below is a real set now rather than a glow composited
+    // over the page, so there is nothing to blend into and nothing to hide.
+    backdropMat.opacityNode = float(1);
+    backdropMat.transparent = false;
   }
   const BACKDROP_Z = -30;
   const backdrop = new Mesh(backdropGeom, backdropMat);
-  // Y is set by `placeCamera`, from where the view axis actually crosses this
+  // Y is set by `frameCamera`, from where the view axis actually crosses this
   // plane. It cannot be a constant tied to the board: the camera looks *down*,
   // so on a plane this far back the centre of frame sits some 20 units below
-  // the board, and a pool centred near the board's own height lands entirely
-  // above the top of the picture.
+  // the board, and a wall centred near the board's own height would leave the
+  // bottom of the picture empty.
   backdrop.position.set(0, 0, BACKDROP_Z);
   scene.add(backdrop);
 
-  // Catches the contact shadow on an otherwise transparent canvas, so the board
-  // sits on the page rather than floating in front of it. Drawn over the
-  // backdrop, so the shadow reads against the lit sweep and not just the page.
-  const shadowPlane = new Mesh(
-    new PlaneGeometry(120, 120),
-    // Warm brown at low opacity, not the default black. A shadow on a blush
-    // sweep is light the ground is *missing*, and that ground is warm — a
-    // neutral black shadow on it reads as a dirty grey cut-out. Lighter than
-    // the dark theme's 0.46 too: the same density that grounded the board on
-    // black looks like a bruise on blush.
-    new ShadowMaterial({ color: 0x6b4436, opacity: 0.44, transparent: true }),
-  );
-  shadowPlane.rotation.x = -Math.PI / 2;
-  shadowPlane.position.y = -CASE_H / 2 - 0.01;
-  shadowPlane.receiveShadow = true;
-  scene.add(shadowPlane);
+  // --- table ----------------------------------------------------------------
+  // The surface the board stands on, and the second of the two colours. It is
+  // what turns a flat field of sky into a *set*: the line where it meets the
+  // wall is a horizon, and a horizon is what tells you the board is standing on
+  // something rather than floating in a colour.
+  //
+  // Opaque and lit, not a ShadowMaterial catcher. A catcher only draws the
+  // shadow and lets the page through everywhere else, which was right while the
+  // canvas floated over the page; here the table has to have a colour of its
+  // own, take the light, and darken under the board.
+  const tableMat = new MeshPhysicalNodeMaterial();
+  tableMat.color = new Color(0xf3ece2);
+  tableMat.roughness = 0.62;
+  tableMat.metalness = 0;
+  // Finite, and long toward the camera rather than square. Its *far* edge is
+  // the horizon, and the horizon is the whole point — an infinite ground plane
+  // has its horizon at eye level, which from a camera looking down 30-odd
+  // degrees sits far above a 15-degree half-FOV. An unbounded table therefore
+  // fills the entire frame and the wall never appears at all. `frameCamera`
+  // places this so the edge lands in the upper part of the picture.
+  const TABLE_DEPTH = 90;
+  const tableGeom = new PlaneGeometry(400, TABLE_DEPTH);
+  const table = new Mesh(tableGeom, tableMat);
+  table.rotation.x = -Math.PI / 2;
+  table.position.y = -CASE_H / 2 - 0.01;
+  table.receiveShadow = true;
+  scene.add(table);
 
   // --- camera and interaction ----------------------------------------------
   const pointer = new Vector2(0, 0);
@@ -529,15 +541,23 @@ export async function createHeroScene(
    * key field foreshortens away and the chamfer highlight along the front edge
    * stops catching, which is what sells the case as milled.
    */
-  const ELEVATION = 0.62;
+  const ELEVATION = 0.55;
+  /**
+   * Where the horizon sits, as a fraction of the half-FOV above frame centre.
+   * Above 1 it would leave the picture; near 0 the wall becomes a sliver.
+   */
+  const HORIZON_LIFT = 0.55;
   /**
    * Breathing room around the board inside the frame. Above 1.0, because the
-   * fit it multiplies is exact: anything below 1 is a crop, not a tighter shot.
+   * fit it multiplies is not quite exact: it solves for the board's *centre*
+   * depth, while the near corner sits half a case-depth closer to the camera
+   * and so projects wider than the solve allows for. The margin covers that.
+   * Well above 1.0, because anything below 1 is a crop, not a tighter shot.
    * It read as safe only while the old worst-case diagonal fit was inflating
    * the vertical term enough to hide it — once the width became the binding
    * axis, 0.95 cut the board off at both edges.
    */
-  const PADDING = 1.08;
+  const PADDING = 1.18;
   /** Largest yaw the pointer and idle drift can reach, combined. */
   const MAX_YAW = 0.3;
 
@@ -620,6 +640,22 @@ export async function createHeroScene(
     // frame metres across, so tying the pool's placement to it left the bias
     // invisible; the board's footprint is the thing the glow has to sit behind.
     backdrop.position.y = axisY + caseD * 0.5;
+
+    // Put the table's far edge — the horizon — a fixed fraction of the way up
+    // the frame, by solving for it rather than by picking a z and hoping. The
+    // angle from the view axis up to a point on the ground plane is
+    // `ELEVATION - atan(dropToGround / distanceToIt)`, so inverting that for a
+    // target angle gives the z the edge has to sit at. Solved per frame because
+    // it depends on where the camera currently is, and the camera now moves.
+    const horizonTarget = (fovV / 2) * HORIZON_LIFT;
+    // Plus half the depth, not minus. Rotating the plane by -PI/2 about X maps
+    // its local +Y to world -Z, so the mesh spans `position.z +/- depth/2` and
+    // the *far* edge is the lower bound. Subtracting put the whole table behind
+    // its own horizon, where it showed up as a stripe above the wall.
+    const farEdge =
+      camera.position.z -
+      (camera.position.y + CASE_H / 2) / Math.tan(ELEVATION - horizonTarget);
+    table.position.z = farEdge + TABLE_DEPTH / 2;
 
     // Size the sweep to the frustum where it actually sits, so its falloff is
     // measured against what the viewer can see. 2.4x the visible half-extent
@@ -749,6 +785,8 @@ export async function createHeroScene(
       for (const material of legendMats) material.dispose();
       backdropGeom.dispose();
       backdropMat.dispose();
+      tableGeom.dispose();
+      tableMat.dispose();
       env.dispose();
       atlas.dispose();
       renderer.dispose();
