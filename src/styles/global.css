@@ -154,6 +154,8 @@ body {
 .hero-board {
   margin-top: var(--space-12);
   perspective: 1200px;
+  /* The pool of light the board sits in. Kept behind both the SVG and the
+     canvas so the studio backdrop reads the same either way. */
   background: radial-gradient(
     ellipse 70% 60% at 50% 40%,
     color-mix(in srgb, var(--bg-2) 60%, transparent),
@@ -164,6 +166,50 @@ body {
 .hero-board .board {
   max-width: calc(var(--container) * 0.67);
   transform: rotateX(16deg);
+}
+
+/* --- Hero board: SVG first paint, 3D when it arrives --- */
+
+.hero-board-stage {
+  position: relative;
+  aspect-ratio: 2 / 1;
+  max-width: calc(var(--container) * 0.86);
+  margin-inline: auto;
+}
+
+.hero-board-svg,
+.hero-board-canvas {
+  position: absolute;
+  inset: 0;
+  transition: opacity var(--d-slow, 600ms) ease;
+}
+
+.hero-board-svg {
+  display: grid;
+  place-items: center;
+}
+
+/* The SVG is the fallback, so it stays in the box until the canvas is drawing. */
+.hero-board-svg.is-replaced {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hero-board-canvas {
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+
+.hero-board-canvas.is-ready {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-board-svg,
+  .hero-board-canvas {
+    transition: none;
+  }
 }
 
 /* --- Configurator --- */
@@ -190,8 +236,13 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: var(--space-8);
-  /* Positioning context for the exit layer (see animations/keyboard.ts). */
-  position: relative;
+  /* The options column is long; without this the board scrolls away and you are
+     changing a keyboard you cannot see. Sticky also gives the exit layer its
+     positioning context (see animations/keyboard.ts), and align-self keeps the
+     box its own height rather than being stretched to the grid row. */
+  position: sticky;
+  top: var(--space-8);
+  align-self: start;
 }
 
 /* Ghost copies of keys the new layout dropped. Created and removed entirely by

@@ -37,6 +37,32 @@ and focus restore, the option groups being real radios that arrow keys operate,
 and the price bar announcing one settled total rather than every frame of the
 count-up.
 
+### Two boards, two registers
+
+The page shows the keyboard twice, so the two are deliberately different things
+rather than the same drawing at two sizes.
+
+The **hero** is a product shot: a real-time WebGPU render (Three.js, TSL node
+materials) under a three-point studio rig — warm key light for form, a cool
+kicker behind-right to separate the case from a dark page, and a contact shadow
+so it sits on the page rather than floating. It carries no legends, because a
+product shot does not need them.
+
+The **configurator** board stays SVG: a flat spec drawing that does carry the
+legends, morphs between layouts, and is the thing you are actually editing. It
+is sticky, so scrolling the options column never leaves you configuring a
+keyboard you cannot see.
+
+Both are built from the same `buildBoard` matrices, so the 3D board cannot drift
+into showing a keyboard the product does not make.
+
+The 3D is progressive enhancement, not a dependency. The SVG paints first and
+the Three chunk (~230 kB gzip, code-split so it never touches first paint) loads
+after, cross-fading in when ready. It is skipped entirely below 900px — where
+the board is small, the chunk is expensive and the GPU budget is tightest — and
+the render loop pauses via `IntersectionObserver` once you scroll past the hero.
+If WebGPU is unavailable or the chunk fails, the SVG simply stays.
+
 ### Keyboard geometry
 
 `data/layouts.ts` describes each board as rows of `{ t: 'key', l, w }` and

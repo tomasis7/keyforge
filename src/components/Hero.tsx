@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { heroEntrance } from '../animations/hero';
 import { CASE_OPTIONS, COLORWAYS } from '../data/options';
 import { useConfigurator } from '../store/configurator';
+import { HeroBoard3D } from './HeroBoard3D';
 import { KeyboardSVG } from './KeyboardSVG';
 
 export function Hero() {
@@ -41,7 +42,9 @@ export function Hero() {
         Start building
       </a>
       <div className="hero-board">
-        <KeyboardSVG layout={layout} caseOption={caseOption} colorway={colorway} />
+        <HeroBoard3D layout={layout} caseOption={caseOption} colorway={colorway}>
+          <KeyboardSVG layout={layout} caseOption={caseOption} colorway={colorway} />
+        </HeroBoard3D>
       </div>
     </section>
   );
