@@ -61,8 +61,12 @@ const S = 1 / KEY_U;
 /** Keycap height, and how far the cap sits above the case top. */
 const CAP_H = 0.42;
 const CASE_H = 2.1;
-/** Extra case beyond the key field, on every side. The visible black frame. */
-const BEZEL = 0.3;
+/**
+ * Extra case beyond the key field, on every side — the frame the keys sit
+ * inside. Close to a full key wide, so the board reads as a machined block the
+ * keys are set into rather than a plate they are sitting on.
+ */
+const BEZEL = 0.85;
 /**
  * Width of the bright turn-over along the case's top edge, in world units.
  * Absolute rather than a fraction of case height: a chamfer is a machined edge
@@ -152,6 +156,11 @@ export async function createHeroScene(
   const board = buildBoard(layout);
   const boardW = board.widthPx * S;
   const boardD = board.heightPx * S;
+  // Outer dimensions of the case. The camera has to frame these, not the key
+  // field: the bezel is wide enough now that fitting the keys alone would run
+  // the case off the edge of the canvas.
+  const caseW = boardW + BEZEL * 2;
+  const caseD = boardD + BEZEL * 2;
 
   const root = new Group();
   scene.add(root);
@@ -160,13 +169,7 @@ export async function createHeroScene(
   // The case runs wider than the key field so there is a substantial frame
   // around the keys, and deep enough to read as a milled block rather than a
   // tray the caps are sitting on.
-  const caseGeom = new RoundedBoxGeometry(
-    boardW + BEZEL * 2,
-    CASE_H,
-    boardD + BEZEL * 2,
-    4,
-    0.14,
-  );
+  const caseGeom = new RoundedBoxGeometry(caseW, CASE_H, caseD, 4, 0.14);
   const caseMat = caseMaterial(caseOption.hex);
   const caseMesh = new Mesh(caseGeom, caseMat);
   caseMesh.castShadow = true;
@@ -368,8 +371,8 @@ export async function createHeroScene(
     // turns it, which is exactly when someone is looking at it.
     const cos = Math.cos(MAX_YAW);
     const sin = Math.sin(MAX_YAW);
-    const yawedW = boardW * cos + boardD * sin;
-    const yawedD = boardD * cos + boardW * sin;
+    const yawedW = caseW * cos + caseD * sin;
+    const yawedD = caseD * cos + caseW * sin;
     const projectedH =
       yawedD * Math.cos(ELEVATION) + (CASE_H + CAP_H) * Math.sin(ELEVATION);
 
