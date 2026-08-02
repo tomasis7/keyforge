@@ -114,6 +114,60 @@ export function HeroBoard3D({ layout, caseOption, colorway, children }: Props) {
     return () => window.removeEventListener('pointermove', onMove);
   }, []);
 
+  // Drag to turn the board. Deliberately not gated on reduced motion: this is
+  // direct manipulation the viewer initiated, not animation played at them.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let last: { x: number; y: number } | null = null;
+
+    const onDown = (event: PointerEvent) => {
+      // Only the primary button; a right-click drag is a context menu.
+      if (event.button !== 0) return;
+      last = { x: event.clientX, y: event.clientY };
+      // Capture, so a fast drag that leaves the canvas keeps turning the board
+      // instead of stopping dead at the edge and stranding the cursor mid-grab.
+      canvas.setPointerCapture(event.pointerId);
+      canvas.classList.add('is-grabbing');
+      sceneRef.current?.setDragging(true);
+    };
+
+    const onDrag = (event: PointerEvent) => {
+      if (!last) return;
+      // Pixels to radians. Yaw is looser than pitch because there is far more
+      // of the board to travel horizontally, and pitch hits its clamp quickly.
+      sceneRef.current?.rotateBy(
+        (event.clientX - last.x) * 0.006,
+        (event.clientY - last.y) * 0.004,
+      );
+      last = { x: event.clientX, y: event.clientY };
+    };
+
+    const onUp = (event: PointerEvent) => {
+      if (!last) return;
+      last = null;
+      if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+      canvas.classList.remove('is-grabbing');
+      sceneRef.current?.setDragging(false);
+    };
+
+    canvas.addEventListener('pointerdown', onDown);
+    canvas.addEventListener('pointermove', onDrag);
+    canvas.addEventListener('pointerup', onUp);
+    // A cancelled pointer (system gesture, focus loss) never fires pointerup,
+    // and without this the board would stay stuck in the dragging branch.
+    canvas.addEventListener('pointercancel', onUp);
+    return () => {
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointermove', onDrag);
+      canvas.removeEventListener('pointerup', onUp);
+      canvas.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
+
   return (
     <div className="hero-board-stage" ref={wrapRef}>
       <div className={ready ? 'hero-board-svg is-replaced' : 'hero-board-svg'}>{children}</div>

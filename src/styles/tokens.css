@@ -13,18 +13,27 @@
   /* Height of the sticky price bar, so other docked elements can clear it. */
   --price-bar-h: 100px;
 
-  /* --- Color: surfaces (dark, warm-neutral) --- */
-  --bg-0: #0B0B0D;              /* page background */
-  --bg-1: #131316;              /* alternating section background */
-  --bg-2: #1A1A1F;              /* card / panel */
-  --bg-3: #222229;              /* raised control */
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.16);
+  /* --- Color: surfaces (light, warm blush studio) ---
+     A lit studio sweep rather than a neutral page: the surfaces warm *up* as
+     they recede (bg-0 is the deepest blush, panels come forward to white), so
+     a card reads as being nearer the light rather than as a lighter grey.
+     Every surface carries some red — a neutral grey next to these reads green
+     by comparison, which is why none of them are desaturated. */
+  --bg-0: #F2E4DC;              /* page background */
+  --bg-1: #FAF0EA;              /* alternating section background */
+  --bg-2: #FFFFFF;              /* card / panel */
+  --bg-3: #FFF8F4;              /* raised control */
+  /* Warm dark hairlines. Inverted from the white ones this had: on a light
+     surface a translucent white line is invisible. */
+  --line: rgba(58, 38, 30, 0.14);
+  --line-strong: rgba(58, 38, 30, 0.26);
 
-  /* --- Color: text --- */
-  --text-1: #F2F0EA;            /* headings, primary text */
-  --text-2: #9B98A3;            /* secondary body text */
-  --text-3: #63616B;            /* captions, disabled */
+  /* --- Color: text ---
+     Warm near-black rather than pure black, so text sits *in* the blush
+     instead of punching a neutral hole through it. */
+  --text-1: #241C18;            /* headings, primary text */
+  --text-2: #6B5A52;            /* secondary body text */
+  --text-3: #9B8880;            /* captions, disabled */
 
   /* --- Color: accent (burnt orange) --- */
   --accent: #E4572E;
@@ -65,8 +74,12 @@
   --r-pill: 999px;
 
   /* --- Elevation --- */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 8px 30px rgba(0, 0, 0, 0.45);
+  /* Warm and soft. The 0.4/0.45 blacks these were are a dark theme's shadows,
+     where a shadow is really a *darker hole*; on a lit blush surface that reads
+     as grime under the card. A studio shadow on a warm ground is a low-opacity
+     warm brown with a wide spread. */
+  --shadow-1: 0 1px 2px rgba(90, 52, 38, 0.10);
+  --shadow-2: 0 10px 34px rgba(90, 52, 38, 0.16);
 
   /* --- Motion (mirror these exact values in GSAP timelines) --- */
   --d-fast: 150ms;

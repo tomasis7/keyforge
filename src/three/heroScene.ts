@@ -28,7 +28,7 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { studioEnvironment } from './studioEnv';
-import { attribute, color, float, mix, positionLocal, smoothstep, texture, uv, vec2 } from 'three/tsl';
+import { attribute, color, float, min, mix, positionLocal, smoothstep, texture, uv, vec2 } from 'three/tsl';
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, WebGPURenderer } from 'three/webgpu';
 import type { LayoutId } from '../data/layouts';
 import type { CaseOption, ColorwayOption } from '../data/options';
@@ -62,20 +62,25 @@ const S = 1 / KEY_U;
 /** Keycap height, and how far the cap sits above the case top. */
 const CAP_H = 0.42;
 /**
- * A chunky milled block the keys are set *into*, rather than a tray they sit on.
+ * Case height — and the one number here with a real-world answer, so it is set
+ * from millimetres rather than by eye.
  *
- * Sized against the board's depth (~6.5), not in the abstract: a case taller
- * than the board is deep stops reading as a keyboard and becomes a plinth with
- * keys on top, and at any camera elevation that shows the key field the wall
- * then dominates the frame. Roughly 2/3 of the board depth is the point where
- * it still reads as substantial hardware.
+ * One scene unit is one key unit, which is the 19.05mm keycap pitch. That makes
+ * this 18mm, in the range a real 60-65% case occupies. Worth stating because
+ * the number drifted badly upward once — as far as 13.6, a case a quarter of a
+ * metre tall — while chasing a case that "looked thin". It did not look thin
+ * because it was thin. It looked thin because it was black and had nothing to
+ * reflect, so its walls fell to the page background and the only thing left to
+ * see was the lid. That was a material bug; see `caseMaterial`. Geometry cannot
+ * fix a lighting problem, and thickening the case to compensate only produced a
+ * plinth with keys on top.
  *
  * Nearly everything else derives from this — cap seating, legend lift, the
  * chamfer ramp, the backdrop, the shadow catcher and the camera fit. The two
  * things that do *not*, and so must be kept in step by hand, are the light rig's
  * distance and the shadow camera's frustum; see STAGE_DISTANCE.
  */
-const CASE_H = 4.4;
+const CASE_H = 0.95;
 /** Extra case beyond the key field, on every side: the frame around the keys. */
 const BEZEL = 0.3;
 /**
@@ -88,6 +93,10 @@ const CHAMFER = 0.08;
 export interface HeroScene {
   resize: (width: number, height: number) => void;
   setPointer: (x: number, y: number) => void;
+  /** Adds to the board's held rotation, in radians. Used by drag-to-turn. */
+  rotateBy: (yaw: number, pitch: number) => void;
+  /** While dragging, the hover-follow and idle drift stand down. */
+  setDragging: (dragging: boolean) => void;
   setColors: (caseOption: CaseOption, colorway: ColorwayOption) => void;
   /** Stops the render loop when the board is off-screen. */
   setActive: (active: boolean) => void;
@@ -98,13 +107,35 @@ export interface HeroScene {
  * The bright line where a milled case's top face turns over. Both ends of the
  * ramp are computed in JS so the shader only has to interpolate between two
  * constants.
+ *
+ * Needs the case footprint, because a chamfer is an *edge*, and an edge is a
+ * position in two axes. Ramping on height alone — which this did — puts the
+ * whole top face at the top of the ramp, since every point on it shares the
+ * same y. That painted the entire bezel toward white rather than lining its
+ * rim, and on a case only 18mm tall the bezel is most of the case you see, so
+ * a black case came out silver. Measured: it was worth ~82 of the bezel's 146
+ * luminance, more than the environment and every light put together.
  */
-function chamferColor(hex: string) {
+function chamferColor(hex: string, caseW: number, caseD: number) {
   const body = new Color(hex);
   const edge = body.clone().lerp(new Color(0xffffff), 0.22);
-  // positionLocal.y runs -CASE_H/2..CASE_H/2; the top sliver is the chamfer.
-  const ramp = smoothstep(float(CASE_H / 2 - CHAMFER), float(CASE_H / 2), positionLocal.y);
-  return mix(color(body), color(edge), ramp);
+
+  // Near the top face: positionLocal.y runs -CASE_H/2..CASE_H/2.
+  const nearTop = smoothstep(
+    float(CASE_H / 2 - CHAMFER),
+    float(CASE_H / 2),
+    positionLocal.y,
+  );
+  // Near the outer wall: distance in from whichever side is closest. Ramped
+  // outward then inverted rather than written as smoothstep(hi, lo, x), which
+  // is undefined in GLSL.
+  const inset = min(
+    float(caseW / 2).sub(positionLocal.x.abs()),
+    float(caseD / 2).sub(positionLocal.z.abs()),
+  );
+  const nearEdge = smoothstep(float(0), float(CHAMFER), inset).oneMinus();
+
+  return mix(color(body), color(edge), nearTop.mul(nearEdge));
 }
 
 /**
@@ -112,7 +143,7 @@ function chamferColor(hex: string) {
  * milled case: a bright, narrow highlight where the top face turns over. TSL
  * gives it to us from local position rather than a texture.
  */
-function caseMaterial(hex: string): MeshPhysicalNodeMaterial {
+function caseMaterial(hex: string, caseW: number, caseD: number): MeshPhysicalNodeMaterial {
   const material = new MeshPhysicalNodeMaterial();
   // 0.55, not the 0.86 this used to be. A metal has almost no diffuse response
   // — `diffuse *= (1 - metalness)` — so at 0.86 only 14% of the case colour
@@ -124,17 +155,24 @@ function caseMaterial(hex: string): MeshPhysicalNodeMaterial {
   // so a half-metal is the more honest description of it.
   material.metalness = 0.4;
   material.roughness = 0.38;
-  // Heavy clearcoat, and this is the load-bearing value for the darker cases.
   // A clearcoat's reflectance does not depend on the base colour — it is a
   // transparent lacquer over the top — whereas both the diffuse and the metal
-  // F0 of Anodized Black (#1C1C1E) are nearly zero. So on a black case the
-  // clearcoat is essentially the *only* thing that puts light on a wall facing
-  // away from the key light, and it is what stops the sides going to page
-  // black while the top face reads silver.
-  material.clearcoat = 0.85;
+  // F0 of Anodized Black (#1C1C1E) are nearly zero. So on a dark case the
+  // clearcoat is most of what puts light on a wall facing away from the key
+  // light, and it is the knob that trades swatch fidelity against how much the
+  // case's form is visible at all.
+  //
+  // Moderate rather than the 0.85 first tried here. That value was tuned when
+  // the case was 8cm of wall; at 18mm you are looking almost entirely at the
+  // top bezel, which is the face that takes the most clearcoat sheen, and it
+  // pushed Anodized Black all the way to silver. The lower value keeps the
+  // case a dark charcoal. It does not reintroduce the black-box failure —
+  // that was `metalness = 0.86` with an unset `scene.environment`, and both
+  // of those remain fixed.
+  material.clearcoat = 0.45;
   material.clearcoatRoughness = 0.28;
 
-  material.colorNode = chamferColor(hex);
+  material.colorNode = chamferColor(hex, caseW, caseD);
   return material;
 }
 
@@ -191,7 +229,7 @@ export async function createHeroScene(
   scene.environment = env;
   // Below 1 so the room lifts the walls without washing out the studio rig's
   // directional modelling, which is what gives the case its form.
-  scene.environmentIntensity = 0.95;
+  scene.environmentIntensity = 0.7;
 
   const board = buildBoard(layout);
   const boardW = board.widthPx * S;
@@ -210,7 +248,7 @@ export async function createHeroScene(
   // around the keys, and deep enough to read as a milled block rather than a
   // tray the caps are sitting on.
   const caseGeom = new RoundedBoxGeometry(caseW, CASE_H, caseD, 4, 0.14);
-  const caseMat = caseMaterial(caseOption.hex);
+  const caseMat = caseMaterial(caseOption.hex, caseW, caseD);
   const caseMesh = new Mesh(caseGeom, caseMat);
   caseMesh.castShadow = true;
   caseMesh.receiveShadow = true;
@@ -393,7 +431,10 @@ export async function createHeroScene(
   fillFront.position.copy(stage(0.5, 1.6, 6));
   scene.add(fillFront);
 
-  const fill = new HemisphereLight(0x8899bb, 0x0b0b0d, 0.55);
+  // Ground colour was 0x0b0b0d — the old page background, copied in as a
+  // literal. On a blush page the board is standing on a lit surface, so the
+  // bounce coming back up at it is warm and bright, not black.
+  const fill = new HemisphereLight(0xfff4ec, 0xe0c3b2, 0.75);
   scene.add(fill);
 
   // --- backdrop -------------------------------------------------------------
@@ -426,7 +467,13 @@ export async function createHeroScene(
     // A broad plateau before the falloff starts, so the sweep is a lit wall
     // with a soft edge rather than a small bright dot lost in a long gradient.
     const pool = smoothstep(float(0.14), float(0.38), d).oneMinus();
-    backdropMat.colorNode = mix(color(0x2b3340), color(0xa8bcd8), pool);
+    // Warm, and *brighter* than the blush page rather than darker. On the dark
+    // theme this was a pool of light lifting the board off a black page; the
+    // same trick on a light page has to work the other way round or it becomes
+    // a grey smudge behind the product. Here the sweep is a hot spot blooming
+    // out of the page colour, which is what the falloff to transparent then
+    // dissolves back into.
+    backdropMat.colorNode = mix(color(0xf6e3d8), color(0xfffdfb), pool);
     // Fades to fully transparent well inside the plane's edges, so the sweep
     // dissolves into the page background instead of ending on a visible seam.
     // The canvas is alpha-blended over the page, so this has to be opacity —
@@ -448,7 +495,12 @@ export async function createHeroScene(
   // backdrop, so the shadow reads against the lit sweep and not just the page.
   const shadowPlane = new Mesh(
     new PlaneGeometry(120, 120),
-    new ShadowMaterial({ opacity: 0.46, transparent: true }),
+    // Warm brown at low opacity, not the default black. A shadow on a blush
+    // sweep is light the ground is *missing*, and that ground is warm — a
+    // neutral black shadow on it reads as a dirty grey cut-out. Lighter than
+    // the dark theme's 0.46 too: the same density that grounded the board on
+    // black looks like a bruise on blush.
+    new ShadowMaterial({ color: 0x6b4436, opacity: 0.3, transparent: true }),
   );
   shadowPlane.rotation.x = -Math.PI / 2;
   shadowPlane.position.y = -CASE_H / 2 - 0.01;
@@ -487,13 +539,17 @@ export async function createHeroScene(
     const vFov = (camera.fov * Math.PI) / 180;
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
 
-    // Fit the board at its *widest* yaw, not at rest. Solving for the resting
-    // pose lets the board swing past the canvas edge as soon as the pointer
-    // turns it, which is exactly when someone is looking at it.
-    const cos = Math.cos(MAX_YAW);
-    const sin = Math.sin(MAX_YAW);
-    const yawedW = caseW * cos + caseD * sin;
-    const yawedD = caseD * cos + caseW * sin;
+    // Fit the board at *any* yaw, not at rest. Solving for the resting pose
+    // lets it swing past the canvas edge as soon as it turns, which is exactly
+    // when someone is looking at it — and since drag-to-turn is unbounded, the
+    // worst case is the footprint's diagonal.
+    //
+    // This costs almost nothing here: `caseW` dwarfs `caseD`, so the diagonal
+    // (18.2) is barely wider than the old MAX_YAW box (18.16). Free rotation
+    // was effectively already paid for.
+    const yawed = Math.hypot(caseW, caseD);
+    const yawedW = yawed;
+    const yawedD = yawed;
     const projectedH =
       yawedD * Math.cos(ELEVATION) + (CASE_H + CAP_H) * Math.sin(ELEVATION);
 
@@ -519,7 +575,10 @@ export async function createHeroScene(
       camera.position.y +
       ((BACKDROP_Z - camera.position.z) / (focus.z - camera.position.z)) *
         (focus.y - camera.position.y);
-    backdrop.position.y = axisY + CASE_H;
+    // Biased off the board's depth, not the case height. The case is 18mm of a
+    // frame metres across, so tying the pool's placement to it left the bias
+    // invisible; the board's footprint is the thing the glow has to sit behind.
+    backdrop.position.y = axisY + caseD * 0.5;
 
     // Size the sweep to the frustum where it actually sits, so its falloff is
     // measured against what the viewer can see. 2.4x the visible half-extent
@@ -548,6 +607,22 @@ export async function createHeroScene(
   let active = true;
   const clock = { t: 0 };
 
+  /**
+   * Rotation the viewer has dialled in by dragging, which persists after they
+   * let go — the board stays where it was put rather than springing back, the
+   * way turning a real object over does.
+   */
+  let spin = 0;
+  let tilt = 0;
+  let dragging = false;
+  /**
+   * Pitch is clamped where yaw is not. Yaw all the way round a keyboard is
+   * useful; pitching past these you are looking at the underside of the case
+   * or straight down the key field, both of which are just broken-looking.
+   */
+  const TILT_MIN = -0.5;
+  const TILT_MAX = 0.6;
+
   const render = () => {
     if (!running) return;
     raf = requestAnimationFrame(render);
@@ -556,15 +631,26 @@ export async function createHeroScene(
     if (!active) return;
     clock.t += 0.0045;
 
-    if (reducedMotion) {
-      root.rotation.set(-0.02, 0, 0);
+    if (reducedMotion && !dragging) {
+      // Held drag rotation still applies: it is direct manipulation the viewer
+      // asked for, not motion happening at them, so reduced-motion suppresses
+      // the drift and the hover-follow but not the thing they are doing.
+      root.rotation.set(-0.02 + tilt, spin, 0);
+    } else if (dragging) {
+      // Nothing but the drag while a finger is down. Letting the hover-follow
+      // keep contributing here fights the drag: the pointer is travelling a
+      // long way, so its ambient term swings hard in the same gesture and the
+      // board no longer tracks the hand.
+      root.rotation.y = spin;
+      root.rotation.x = -0.02 + tilt;
     } else {
       // Ease toward the pointer so the board reads as an object being turned
       // over on a table, plus a slow idle drift so it is never dead still.
+      // Both are offsets *on top of* whatever rotation was dragged in.
       pointer.lerp(targetPointer, 0.055);
-      // Stays within MAX_YAW, which is what placeCamera framed for.
-      root.rotation.y = pointer.x * (MAX_YAW - 0.04) + Math.sin(clock.t) * 0.035;
-      root.rotation.x = -0.02 + pointer.y * 0.12 + Math.cos(clock.t * 0.8) * 0.015;
+      root.rotation.y = spin + pointer.x * (MAX_YAW - 0.04) + Math.sin(clock.t) * 0.035;
+      root.rotation.x =
+        -0.02 + tilt + pointer.y * 0.12 + Math.cos(clock.t * 0.8) * 0.015;
     }
     renderer.render(scene, camera);
   };
@@ -580,11 +666,24 @@ export async function createHeroScene(
     setPointer(x, y) {
       targetPointer.set(x, y);
     },
+    rotateBy(yaw, pitch) {
+      spin += yaw;
+      tilt = Math.min(TILT_MAX, Math.max(TILT_MIN, tilt + pitch));
+    },
+    setDragging(next) {
+      dragging = next;
+      if (!next) {
+        // Hand the hover-follow back the pointer it has, rather than letting it
+        // lerp from wherever the cursor was when the drag started — otherwise
+        // releasing the mouse snaps the board through the whole drag distance.
+        pointer.copy(targetPointer);
+      }
+    },
     setActive(next) {
       active = next;
     },
     setColors(nextCase, nextColorway) {
-      caseMat.colorNode = chamferColor(nextCase.hex);
+      caseMat.colorNode = chamferColor(nextCase.hex, caseW, caseD);
       caseMat.needsUpdate = true;
       for (const zone of zones) {
         const material = capMaterials.get(zone);

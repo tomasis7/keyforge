@@ -43,9 +43,10 @@ The page shows the keyboard twice, so the two are deliberately different things
 rather than the same drawing at two sizes.
 
 The **hero** is a product shot: a real-time WebGPU render (Three.js, TSL node
-materials) under a three-point studio rig — warm key light for form, a cool
-kicker behind-right to separate the case from a dark page, and a contact shadow
-so it sits on the page rather than floating.
+materials) under a studio rig — warm key light for form, a kicker behind-right
+to separate the case from the page, a weak front fill for the one face neither
+of those addresses, and a contact shadow so it sits on the page rather than
+floating. Drag it to turn it; the pose you leave it in is the pose it keeps.
 
 Its legends come from a canvas atlas, drawn on their own planes above the caps
 rather than textured onto them: `RoundedBoxGeometry` does not give the top face
@@ -83,11 +84,29 @@ wall's normal is horizontal, so the case's sides sample only that band while
 its top face samples the ceiling. The *range* of that gradient is the ratio
 between them.
 
-The heavy `clearcoat` (0.85) is what carries the dark cases. A clearcoat is a
+The `clearcoat` (0.45) is what carries the dark cases. A clearcoat is a
 transparent lacquer, so its reflectance does not depend on the base colour,
 whereas both the diffuse and the metal F0 of Anodized Black (`#1C1C1E`) are
 near zero. On a black case the clearcoat is effectively the only thing putting
 light on a wall that faces away from the key light.
+
+### Case height is set in millimetres
+
+One scene unit is one key unit, which is the **19.05mm keycap pitch**. `CASE_H`
+is written against that, not chosen by eye, because it once drifted to 13.6 — a
+case a quarter of a metre tall — while chasing a case that "looked thin". It
+never was thin. It looked thin because it was black with nothing to reflect, so
+its walls fell to the page colour and the only thing left to see was its lid.
+That was the material bug above. Geometry cannot fix a lighting problem.
+
+### The chamfer is an edge, so it needs two axes
+
+`chamferColor` ramps on height *and* on distance in from the outer wall. Ramping
+on height alone puts the whole top face at the top of the ramp — every point on
+it shares the same y — so instead of lining the rim it washes the entire bezel
+toward white. On an 18mm case the bezel is most of the case you can see, which
+made Anodized Black render as silver. Measured, that one ramp was worth ~82 of
+the bezel's 146 luminance: more than the environment and every light combined.
 
 ### Backdrop
 
@@ -233,13 +252,19 @@ asserts the committed value still matches. Changing the palette without running
 
 ## Known gaps
 
-- **Anodized Black does not look black in the hero.** The clearcoat that stops
-  the case reading as a grey lid on a black box also lifts `#1C1C1E` to a grey,
-  so the 3D board and the SVG board visibly disagree on that one colourway.
-  This is a deliberate trade: the two settings are mutually exclusive, and a
-  case that reads as one milled block was judged worth more than swatch
-  fidelity on the hero. The other four cases stay clearly distinct from each
-  other. Backing `clearcoat` down toward 0.55 trades back the other way.
+- **Anodized Black renders lighter than its swatch.** The hero puts the bezel
+  around luminance 64 against the swatch's 28.6, because a lit dark surface
+  under a studio environment is not the flat colour on a chip. It reads as one
+  dark charcoal block rather than as silver, which is what the chamfer fix
+  bought back, but the 3D and SVG boards will never agree exactly here. Pushing
+  `clearcoat` down further closes the gap and starts costing the case its form
+  again.
+
+- The hero's lighting is soft and diffuse, matching the light blush theme. It
+  is deliberately *not* the hard-rim, deep-falloff product-shot treatment: that
+  look wants a dark ground to fall off into. Adding it would also want a real
+  planar reflection, which is a second full scene render per frame — a cost the
+  hero budget has not been asked to carry.
 
 - The 3D legends are drawn at weight 700, but `fonts.css` self-hosts IBM Plex
   Mono only at 400 and 500, so canvas is applying *synthetic* bold rather than a

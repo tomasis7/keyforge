@@ -203,6 +203,16 @@ body {
 
 .hero-board-canvas.is-ready {
   opacity: 1;
+  /* Only once it is actually drawing. Before that the SVG fallback is what is
+     on screen, and advertising a grab handle over a static image is a lie. */
+  cursor: grab;
+  /* Stops a drag on the board from scrolling the page or selecting the text
+     behind it — without this a vertical drag scrolls instead of tilting. */
+  touch-action: none;
+}
+
+.hero-board-canvas.is-grabbing {
+  cursor: grabbing;
 }
 
 @media (prefers-reduced-motion: reduce) {

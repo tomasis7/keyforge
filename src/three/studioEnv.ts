@@ -41,11 +41,17 @@ export function studioEnvironment(): CanvasTexture {
   // ceiling and the walls sample the horizon, so the *range* of this gradient
   // is the ratio between them: a pure white ceiling over a dark horizon is what
   // made the case read as two different materials rather than one shaded block.
-  sweep.addColorStop(0, '#dde4ee');
-  sweep.addColorStop(0.3, '#c6d0de');
-  sweep.addColorStop(0.52, '#b4c0d0');
-  sweep.addColorStop(0.76, '#59616f');
-  sweep.addColorStop(1, '#15181d');
+  //
+  // Warm, and light all the way to the floor. This room is reflected by a board
+  // standing on a blush page, so its lower half is bounce off a lit surface,
+  // not the black void a dark-page scene could assume. Leaving the floor dark
+  // puts a hard dark band across the underside of every cap and along the case
+  // wall, which reads as dirt rather than as shading.
+  sweep.addColorStop(0, '#fffaf6');
+  sweep.addColorStop(0.3, '#fbeade');
+  sweep.addColorStop(0.52, '#f0d9cc');
+  sweep.addColorStop(0.76, '#cfb0a0');
+  sweep.addColorStop(1, '#8d6f61');
   ctx.fillStyle = sweep;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
