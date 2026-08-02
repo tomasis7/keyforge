@@ -144,6 +144,13 @@ swing out of shot on exactly the drag that shows it off.
 Four surfaces, four steps of value, darkest to lightest: board, wall, floor,
 plinth. That stack is the whole composition.
 
+`FLOOR_Y` has to account for everything stacked on it, which is easy to get
+wrong when the stack changes. While the floor *was* the surface the board stood
+on, `-CASE_H / 2` was right. Once the plinth went in between, that same value
+put the floor plane straight through the slab — burying its sides and leaving
+only its top face poking 0.01 above, so the plinth read as a sheet of paper
+under the board rather than a block it stands on.
+
 ### The set: wall, horizon, floor
 
 The hero is a two-colour set — a sky wall and a warm table meeting at a horizon

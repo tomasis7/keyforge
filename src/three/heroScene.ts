@@ -89,11 +89,20 @@ const BEZEL = 0.3;
  */
 const CHAMFER = 0.08;
 
-/** Top of the floor, a hair under the board so they never z-fight. */
-const FLOOR_Y = -CASE_H / 2 - 0.01;
 /** Thickness of the plinth, and how far it oversails the case on each side. */
 const PLINTH_H = 0.55;
-const PLINTH_MARGIN = 0.9;
+const PLINTH_MARGIN = 1.3;
+/**
+ * Top of the floor: below the *plinth*, not below the board.
+ *
+ * This has to account for everything stacked on it. While the floor was the
+ * surface the board stood on, `-CASE_H / 2` was right; once the plinth went in
+ * between, that same value put the floor plane straight through the slab —
+ * burying its sides and leaving only the top face poking 0.01 above, so the
+ * plinth read as a sheet of paper under the board rather than a block it stands
+ * on, with a hard wedge where the two planes intersected.
+ */
+const FLOOR_Y = -CASE_H / 2 - PLINTH_H - 0.01;
 
 export interface HeroScene {
   resize: (width: number, height: number) => void;
