@@ -9,6 +9,7 @@
  * Legends come from a canvas atlas so the whole board's lettering is a single
  * texture and each zone of keycaps stays one instanced draw call.
  */
+import type { BufferGeometry } from 'three';
 import {
   Color,
   DirectionalLight,
@@ -59,7 +60,9 @@ const rowTilt = (z: number, depth: number): number => (z / depth) * -0.5;
 const S = 1 / KEY_U;
 /** Keycap height, and how far the cap sits above the case top. */
 const CAP_H = 0.42;
-const CASE_H = 0.62;
+const CASE_H = 1.05;
+/** Extra case beyond the key field, on every side. The visible black frame. */
+const BEZEL = 0.3;
 
 export interface HeroScene {
   resize: (width: number, height: number) => void;
@@ -99,6 +102,13 @@ function caseMaterial(hex: string): MeshPhysicalNodeMaterial {
   return material;
 }
 
+/** Top face lit, sides in shadow. Both ends mixed in JS; the shader lerps. */
+function capColor(face: Color) {
+  const side = face.clone().multiplyScalar(0.78);
+  const top = smoothstep(float(CAP_H * 0.1), float(CAP_H * 0.5), positionLocal.y);
+  return mix(color(side), color(face), top);
+}
+
 /**
  * PBT keycaps: matte, no metal. The top face is lifted slightly so caps catch
  * the key light and read as separate objects against the case rather than a
@@ -110,11 +120,7 @@ function capMaterial(hex: string): MeshPhysicalNodeMaterial {
   material.roughness = 0.78;
   material.sheen = 0.3;
 
-  // The two ends of the ramp are mixed in JS; the shader only interpolates.
-  const face = new Color(hex);
-  const side = face.clone().multiplyScalar(0.78);
-  const top = smoothstep(float(CAP_H * 0.1), float(CAP_H * 0.5), positionLocal.y);
-  material.colorNode = mix(color(side), color(face), top);
+  material.colorNode = capColor(new Color(hex));
   return material;
 }
 
@@ -145,48 +151,82 @@ export async function createHeroScene(
   scene.add(root);
 
   // --- case -----------------------------------------------------------------
-  const caseGeom = new RoundedBoxGeometry(boardW, CASE_H, boardD, 4, 0.16);
+  // The case runs wider than the key field so there is a substantial frame
+  // around the keys, and deep enough to read as a milled block rather than a
+  // tray the caps are sitting on.
+  const caseGeom = new RoundedBoxGeometry(
+    boardW + BEZEL * 2,
+    CASE_H,
+    boardD + BEZEL * 2,
+    4,
+    0.14,
+  );
   const caseMat = caseMaterial(caseOption.hex);
   const caseMesh = new Mesh(caseGeom, caseMat);
   caseMesh.castShadow = true;
   caseMesh.receiveShadow = true;
   root.add(caseMesh);
 
-  // --- keycaps, one instanced mesh per zone --------------------------------
-  // Three draw calls and three flat materials, rather than per-instance colour:
-  // the zones are the only colour variation the board has.
+  // --- keycaps --------------------------------------------------------------
+  // Grouped by zone *and* size. Each distinct cap size gets its own geometry,
+  // built at true size, so no cap is ever scaled: scaling stretches corner
+  // radii and shoulder angles with the key, which is what made the spacebar
+  // and enter cap read as lozenges rather than long keycaps.
   const zones: Zone[] = ['alpha', 'mod', 'accent'];
-  const capGeom = keycapGeometry(CAP_H);
-  const capMeshes = new Map<Zone, InstancedMesh>();
+  const capGeoms = new Map<string, BufferGeometry>();
+  const capMaterials = new Map<Zone, MeshPhysicalNodeMaterial>();
   const dummy = new Object3D();
 
+  const sizeKey = (w: number, d: number) => `${w.toFixed(3)}x${d.toFixed(3)}`;
+  const capGeometryFor = (w: number, d: number): BufferGeometry => {
+    const id = sizeKey(w, d);
+    let geometry = capGeoms.get(id);
+    if (!geometry) {
+      geometry = keycapGeometry(w, d, CAP_H);
+      capGeoms.set(id, geometry);
+    }
+    return geometry;
+  };
+
   for (const zone of zones) {
-    const keys = board.keys.filter((k) => k.zone === zone);
-    const mesh = new InstancedMesh(capGeom, capMaterial(colorway[zone]), keys.length);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    keys.forEach((key, i) => {
-      // SVG space is y-down and origin top-left; the scene is y-up, centred.
-      const z = (key.by + key.bh / 2) * S - boardD / 2;
-      dummy.position.set(
-        (key.bx + key.bw / 2) * S - boardW / 2,
-        // Seated *into* the tray rather than resting on a slab, so the case
-        // rim rises past the base of the caps as it does on a real board.
-        CASE_H / 2 + CAP_H / 2 - SEAT,
-        z,
-      );
-      // Row sculpting: the far rows lean back toward the user and the near
-      // rows lean forward, which is why a real board's rows catch the light
-      // at different angles instead of reading as one flat field.
-      dummy.rotation.set(rowTilt(z, boardD), 0, 0);
-      dummy.scale.set(key.bw * S, 1, key.bh * S);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
-    });
-    dummy.rotation.set(0, 0, 0);
-    mesh.instanceMatrix.needsUpdate = true;
-    capMeshes.set(zone, mesh);
-    root.add(mesh);
+    const material = capMaterial(colorway[zone]);
+    capMaterials.set(zone, material);
+
+    // One instanced mesh per (zone, size) pair — a handful of extra draw calls
+    // in exchange for every cap keeping its proper profile.
+    const bySize = new Map<string, typeof board.keys>();
+    for (const key of board.keys) {
+      if (key.zone !== zone) continue;
+      const id = sizeKey(key.bw * S, key.bh * S);
+      const bucket = bySize.get(id);
+      if (bucket) bucket.push(key);
+      else bySize.set(id, [key]);
+    }
+
+    for (const keys of bySize.values()) {
+      const geometry = capGeometryFor(keys[0].bw * S, keys[0].bh * S);
+      const mesh = new InstancedMesh(geometry, material, keys.length);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      keys.forEach((key, i) => {
+        // SVG space is y-down and origin top-left; the scene is y-up, centred.
+        const z = (key.by + key.bh / 2) * S - boardD / 2;
+        dummy.position.set(
+          (key.bx + key.bw / 2) * S - boardW / 2,
+          // Seated *into* the tray rather than resting on a slab, so the case
+          // rim rises past the base of the caps as it does on a real board.
+          CASE_H / 2 + CAP_H / 2 - SEAT,
+          z,
+        );
+        dummy.rotation.set(rowTilt(z, boardD), 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      });
+      dummy.rotation.set(0, 0, 0);
+      mesh.instanceMatrix.needsUpdate = true;
+      root.add(mesh);
+    }
   }
 
   // --- legends --------------------------------------------------------------
@@ -391,15 +431,17 @@ export async function createHeroScene(
       caseMat.colorNode = chamferColor(nextCase.hex);
       caseMat.needsUpdate = true;
       for (const zone of zones) {
-        const mesh = capMeshes.get(zone);
-        if (!mesh) continue;
-        mesh.material = capMaterial(nextColorway[zone]);
+        const material = capMaterials.get(zone);
+        if (!material) continue;
+        const face = new Color(nextColorway[zone]);
+        material.colorNode = capColor(face);
+        material.needsUpdate = true;
       }
     },
     dispose() {
       running = false;
       cancelAnimationFrame(raf);
-      capGeom.dispose();
+      for (const geometry of capGeoms.values()) geometry.dispose();
       caseGeom.dispose();
       for (const geometry of legendGeoms) geometry.dispose();
       for (const material of legendMats) material.dispose();

@@ -10,6 +10,9 @@
    downloaded and parsed, and the font files were another hop after that. */
 
 :root {
+  /* Height of the sticky price bar, so other docked elements can clear it. */
+  --price-bar-h: 100px;
+
   /* --- Color: surfaces (dark, warm-neutral) --- */
   --bg-0: #0B0B0D;              /* page background */
   --bg-1: #131316;              /* alternating section background */

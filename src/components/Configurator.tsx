@@ -75,10 +75,13 @@ export function Configurator() {
           Configure yours
         </h2>
         <div className="configurator-grid" data-reveal-group>
+          {/* Options first: they are what you act on. The board follows as the
+              result, docked to the bottom of the viewport while you scroll so
+              it stays in sight without leading the section. */}
+          <OptionsPanel />
           <div className="configurator-viewer" data-reveal ref={viewerRef}>
             <KeyboardSVG layout={layout} caseOption={caseOption} colorway={colorway} />
           </div>
-          <OptionsPanel />
         </div>
       </div>
       <PriceBar onReview={() => setSummaryOpen(true)} />

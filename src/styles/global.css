@@ -229,10 +229,13 @@ body {
      board, so a two-column layout left a tall empty gutter under the board and
      squeezed the board into half the page. Full width gives the board roughly
      twice the size and lets the options spread into their own grid below. */
-  display: grid;
-  grid-template-columns: 1fr;
+  /* Flex rather than grid: a grid item's containing block is its own row, so
+     a sticky child has no room to travel and never pins. In a flex column the
+     containing block is the whole container, which is what lets the board lift
+     up over the options while you scroll them. */
+  display: flex;
+  flex-direction: column;
   gap: var(--space-8);
-  align-items: start;
 }
 
 .configurator-viewer {
@@ -244,9 +247,12 @@ body {
      changing a keyboard you cannot see. Sticky also gives the exit layer its
      positioning context (see animations/keyboard.ts), and align-self keeps the
      box its own height rather than being stretched to the grid row. */
-  position: sticky;
-  top: var(--space-6);
-  align-self: start;
+  /* Not sticky. The board now sits after the options, and sticky can only hold
+     an element inside its own containing block — a trailing element's natural
+     position is already at the end, so there is no travel and it never pins.
+     Keeping the board visible while scrolling the menu would mean putting it
+     first again. Position (for the exit layer) comes from relative instead. */
+  position: relative;
 }
 
 /* Full width, so the board is roughly twice the size it was in the old two
@@ -254,7 +260,7 @@ body {
    own most of the viewport and leave nothing to scroll the options through. */
 .configurator-viewer .board {
   max-width: 100%;
-  max-height: 46vh;
+  max-height: 52vh;
 }
 
 /* Ghost copies of keys the new layout dropped. Created and removed entirely by
