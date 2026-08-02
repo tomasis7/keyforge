@@ -6,13 +6,13 @@
  * same `buildBoard` matrices the SVG uses, so the 3D board is the same board —
  * not a model that can drift from the product.
  *
- * Deliberately has no legends. This is the product shot; the configurator below
- * is the spec drawing, and it carries the labels. Two registers rather than the
- * same board twice.
+ * Legends come from a canvas atlas so the whole board's lettering is a single
+ * texture and each zone of keycaps stays one instanced draw call.
  */
 import {
   Color,
   DirectionalLight,
+  InstancedBufferAttribute,
   Group,
   HemisphereLight,
   InstancedMesh,
@@ -26,11 +26,19 @@ import {
   Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { color, float, mix, positionLocal, smoothstep } from 'three/tsl';
-import { MeshPhysicalNodeMaterial, WebGPURenderer } from 'three/webgpu';
+import { attribute, color, float, mix, positionLocal, smoothstep, texture, uv, vec2 } from 'three/tsl';
+import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, WebGPURenderer } from 'three/webgpu';
 import type { LayoutId } from '../data/layouts';
 import type { CaseOption, ColorwayOption } from '../data/options';
 import { buildBoard, KEY_U, type Zone } from '../lib/keyboard';
+import { buildLegendAtlas } from './legendAtlas';
+
+/** Which ink colour each zone's legends use. */
+const LEGEND_KEY: Record<Zone, 'onAlpha' | 'onMod' | 'onAccent'> = {
+  alpha: 'onAlpha',
+  mod: 'onMod',
+  accent: 'onAccent',
+};
 
 /** SVG pixels to scene units. One key unit (48px) becomes 1. */
 const S = 1 / KEY_U;
@@ -155,6 +163,60 @@ export async function createHeroScene(
     });
     mesh.instanceMatrix.needsUpdate = true;
     capMeshes.set(zone, mesh);
+    root.add(mesh);
+  }
+
+  // --- legends --------------------------------------------------------------
+  // On their own planes rather than textured onto the caps, for two reasons:
+  // RoundedBoxGeometry does not give the top face clean 0..1 UVs, and the caps
+  // are scaled non-uniformly (the space bar is 6.25u wide), which would stretch
+  // a cap-mapped legend badly. A separately scaled plane keeps every legend the
+  // same size on every key, which is how real keycaps work.
+  await document.fonts.ready;
+  const atlas = buildLegendAtlas(board.keys.map((k) => k.label));
+  const legendGeoms: PlaneGeometry[] = [];
+  const legendMats: MeshBasicNodeMaterial[] = [];
+
+  for (const zone of zones) {
+    const keys = board.keys.filter((k) => k.zone === zone && k.label !== '');
+    if (keys.length === 0) continue;
+
+    const geometry = new PlaneGeometry(1, 1);
+    const offsets = new Float32Array(keys.length * 2);
+    keys.forEach((k, i) => {
+      const [u, v] = atlas.cell.get(k.label) ?? [0, 0];
+      offsets[i * 2] = u;
+      offsets[i * 2 + 1] = v;
+    });
+    geometry.setAttribute('aLegend', new InstancedBufferAttribute(offsets, 2));
+    legendGeoms.push(geometry);
+
+    const material = new MeshBasicNodeMaterial();
+    material.transparent = true;
+    material.depthWrite = false;
+    const sampled = texture(
+      atlas.texture,
+      uv().mul(vec2(atlas.size[0], atlas.size[1])).add(attribute('aLegend', 'vec2')),
+    );
+    material.colorNode = color(new Color(colorway[LEGEND_KEY[zone]]));
+    material.opacityNode = sampled.a;
+    legendMats.push(material);
+
+    const mesh = new InstancedMesh(geometry, material, keys.length);
+    keys.forEach((k, i) => {
+      dummy.position.set(
+        (k.bx + k.bw / 2) * S - boardW / 2,
+        CASE_H / 2 + CAP_H - 0.055,
+        (k.by + k.bh / 2) * S - boardD / 2,
+      );
+      dummy.rotation.set(-Math.PI / 2, 0, 0);
+      // Uniform, so a 6.25u space bar gets the same lettering as a 1u alpha.
+      dummy.scale.set(0.62, 0.62, 1);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    dummy.rotation.set(0, 0, 0);
+    mesh.instanceMatrix.needsUpdate = true;
     root.add(mesh);
   }
 
@@ -300,6 +362,9 @@ export async function createHeroScene(
       cancelAnimationFrame(raf);
       capGeom.dispose();
       caseGeom.dispose();
+      for (const geometry of legendGeoms) geometry.dispose();
+      for (const material of legendMats) material.dispose();
+      atlas.dispose();
       renderer.dispose();
     },
   };

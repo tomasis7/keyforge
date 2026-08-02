@@ -45,8 +45,13 @@ rather than the same drawing at two sizes.
 The **hero** is a product shot: a real-time WebGPU render (Three.js, TSL node
 materials) under a three-point studio rig — warm key light for form, a cool
 kicker behind-right to separate the case from a dark page, and a contact shadow
-so it sits on the page rather than floating. It carries no legends, because a
-product shot does not need them.
+so it sits on the page rather than floating.
+
+Its legends come from a canvas atlas, drawn on their own planes above the caps
+rather than textured onto them: `RoundedBoxGeometry` does not give the top face
+clean 0..1 UVs, and the caps are scaled non-uniformly (a 6.25u space bar), which
+would stretch a cap-mapped legend. Separate uniformly-scaled planes keep every
+legend the same size on every key, which is how real keycaps work.
 
 The **configurator** board stays SVG: a flat spec drawing that does carry the
 legends, morphs between layouts, and is the thing you are actually editing. It
