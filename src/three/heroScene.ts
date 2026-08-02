@@ -27,6 +27,7 @@ import {
   Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { studioEnvironment } from './studioEnv';
 import { attribute, color, float, mix, positionLocal, smoothstep, texture, uv, vec2 } from 'three/tsl';
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, WebGPURenderer } from 'three/webgpu';
 import type { LayoutId } from '../data/layouts';
@@ -47,7 +48,7 @@ const SEAT = 0.1;
 /** Above this width a key is a modifier, and takes a left-aligned legend. */
 const WIDE_KEY_U = 1.4;
 /** Rendered width of a legend quad, and its inset from a wide cap's edge. */
-const LEGEND_W = 0.5;
+const LEGEND_W = 0.6;
 const LEGEND_INSET = 0.12;
 /**
  * Row sculpting. Far rows lean back and near rows lean forward, which is why a
@@ -60,7 +61,21 @@ const rowTilt = (z: number, depth: number): number => (z / depth) * -0.5;
 const S = 1 / KEY_U;
 /** Keycap height, and how far the cap sits above the case top. */
 const CAP_H = 0.42;
-const CASE_H = 3.4;
+/**
+ * A chunky milled block the keys are set *into*, rather than a tray they sit on.
+ *
+ * Sized against the board's depth (~6.5), not in the abstract: a case taller
+ * than the board is deep stops reading as a keyboard and becomes a plinth with
+ * keys on top, and at any camera elevation that shows the key field the wall
+ * then dominates the frame. Roughly 2/3 of the board depth is the point where
+ * it still reads as substantial hardware.
+ *
+ * Nearly everything else derives from this — cap seating, legend lift, the
+ * chamfer ramp, the backdrop, the shadow catcher and the camera fit. The two
+ * things that do *not*, and so must be kept in step by hand, are the light rig's
+ * distance and the shadow camera's frustum; see STAGE_DISTANCE.
+ */
+const CASE_H = 4.4;
 /** Extra case beyond the key field, on every side: the frame around the keys. */
 const BEZEL = 0.3;
 /**
@@ -99,10 +114,25 @@ function chamferColor(hex: string) {
  */
 function caseMaterial(hex: string): MeshPhysicalNodeMaterial {
   const material = new MeshPhysicalNodeMaterial();
-  material.metalness = 0.86;
-  material.roughness = 0.42;
-  material.clearcoat = 0.25;
-  material.clearcoatRoughness = 0.5;
+  // 0.55, not the 0.86 this used to be. A metal has almost no diffuse response
+  // — `diffuse *= (1 - metalness)` — so at 0.86 only 14% of the case colour
+  // survived and the block's appearance was carried entirely by reflection.
+  // With nothing in `scene.environment` to reflect, that meant exactly one face
+  // (the one catching the key light's specular lobe) read as grey and every
+  // other face rendered black. Adding lights cannot fix that; it is a material
+  // problem. Anodising is a dielectric oxide layer over aluminium in any case,
+  // so a half-metal is the more honest description of it.
+  material.metalness = 0.4;
+  material.roughness = 0.38;
+  // Heavy clearcoat, and this is the load-bearing value for the darker cases.
+  // A clearcoat's reflectance does not depend on the base colour — it is a
+  // transparent lacquer over the top — whereas both the diffuse and the metal
+  // F0 of Anodized Black (#1C1C1E) are nearly zero. So on a black case the
+  // clearcoat is essentially the *only* thing that puts light on a wall facing
+  // away from the key light, and it is what stops the sides going to page
+  // black while the top face reads silver.
+  material.clearcoat = 0.85;
+  material.clearcoatRoughness = 0.28;
 
   material.colorNode = chamferColor(hex);
   return material;
@@ -147,7 +177,21 @@ export async function createHeroScene(
   renderer.shadowMap.enabled = true;
 
   const scene = new Scene();
-  const camera = new PerspectiveCamera(30, 1, 0.1, 100);
+  // Far enough to clear the backdrop, which sits well behind the board.
+  const camera = new PerspectiveCamera(30, 1, 0.1, 200);
+
+  // Something for the case metal to actually reflect. Three directional lights
+  // give a half-metal only a few narrow specular lobes, which is why the case
+  // read as a grey lid on a black box: the faces pointing away from the key
+  // light had nothing to return. A pre-filtered room gives every face broad,
+  // soft grey reflection, so the block reads as one continuous anodised surface
+  // whichever way it points. This is the fix for "the case isn't all one grey";
+  // the light rig is not.
+  const env = studioEnvironment();
+  scene.environment = env;
+  // Below 1 so the room lifts the walls without washing out the studio rig's
+  // directional modelling, which is what gives the case its form.
+  scene.environmentIntensity = 0.95;
 
   const board = buildBoard(layout);
   const boardW = board.widthPx * S;
@@ -307,34 +351,104 @@ export async function createHeroScene(
   // --- studio rig -----------------------------------------------------------
   // Key light front-left gives the form; the cool kicker behind-right is what
   // separates the case from a dark page and reads as "studio" rather than "lit".
+  // A directional light is parallel, so its *direction* is all that sets the
+  // lighting angle — these vectors are unit directions, scaled out to a staging
+  // distance. That distance is not cosmetic: the shadow camera is placed at the
+  // light, and a case this tall has a half-diagonal of ~11 units, so a rig at
+  // the old distance of ~10 sat *inside* the case's bounding volume and the
+  // shadow map degenerated. Stage well outside the whole board.
+  const STAGE_DISTANCE = 34;
+  const stage = (x: number, y: number, z: number) =>
+    new Vector3(x, y, z).normalize().multiplyScalar(STAGE_DISTANCE);
+
+  const keyPos = stage(-5, 7.5, 5);
   const key = new DirectionalLight(0xfff4e8, 3.4);
-  key.position.set(-5, 7.5, 5);
+  key.position.copy(keyPos);
   key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.near = 1;
-  key.shadow.camera.far = 30;
-  key.shadow.camera.left = -12;
-  key.shadow.camera.right = 12;
-  key.shadow.camera.top = 12;
-  key.shadow.camera.bottom = -12;
+  key.shadow.camera.far = STAGE_DISTANCE * 2.2;
+  // Half-extent of the board as seen from the light. Derived from the case so a
+  // future height change cannot silently crop the shadow.
+  const shadowExtent = Math.max(caseW, caseD, CASE_H) * 0.95;
+  key.shadow.camera.left = -shadowExtent;
+  key.shadow.camera.right = shadowExtent;
+  key.shadow.camera.top = shadowExtent;
+  key.shadow.camera.bottom = -shadowExtent;
   key.shadow.bias = -0.002;
   key.shadow.radius = 8;
   scene.add(key);
 
   const kicker = new DirectionalLight(0x9fc4ff, 2.2);
-  kicker.position.set(6, 2.6, -6);
+  kicker.position.copy(stage(6, 2.6, -6));
   scene.add(kicker);
+
+  // Front fill, roughly along the camera axis and deliberately weak. The key
+  // and kicker are both high and raking, so the one surface neither of them
+  // addresses is the case's front wall — the face the viewer looks straight at
+  // and the one that reads as the case's thickness. Without this the wall is
+  // carried entirely by the environment's horizon band. No shadow: this is
+  // filling shadow, not making more of it.
+  const fillFront = new DirectionalLight(0xdfe6f2, 2.4);
+  fillFront.position.copy(stage(0.5, 1.6, 6));
+  scene.add(fillFront);
 
   const fill = new HemisphereLight(0x8899bb, 0x0b0b0d, 0.55);
   scene.add(fill);
 
+  // --- backdrop -------------------------------------------------------------
+  // A studio sweep behind the board: a pool of light falling off into the dark.
+  // This is what actually produces depth. Height did not — a tall case adds
+  // uniform bulk, whereas depth is read from value separation between planes,
+  // so a lit background the board is silhouetted against does the work.
+  //
+  // Unlit on purpose. It is a background *light source*, not a surface being
+  // lit, so it should not take part in the studio rig or pick up the board's
+  // shadow. That keeps it stable no matter how the rig is retuned.
+  // Unit plane; `placeCamera` scales it to the frustum. The size cannot be a
+  // constant: the pool has to reach zero *inside the canvas*, and the canvas
+  // edge is set by the viewport, not by the scene. A fixed plane large enough
+  // for one aspect ratio leaves the sweep still bright where the canvas stops,
+  // which draws a visible rectangle on the page.
+  const backdropGeom = new PlaneGeometry(1, 1);
+  const backdropMat = new MeshBasicNodeMaterial();
+  backdropMat.transparent = true;
+  // Never occludes the board, and never writes depth the case has to fight.
+  backdropMat.depthWrite = false;
+  {
+    // Elliptical falloff — wider than tall, so the pool reads as a lamp thrown
+    // across a sweep rather than a circle pasted behind the board.
+    const d = uv().sub(vec2(0.5, 0.5)).mul(vec2(1, 1.5)).length();
+    // Ramped outward and inverted, never `smoothstep(hi, lo, x)`. A reversed
+    // pair is undefined in GLSL, and it showed: the pool clipped to a hard
+    // rectangle instead of falling off. Zero well inside the plane's edges
+    // (|u-0.5| = 0.38 of 0.5) so the sweep never reveals its own geometry.
+    // A broad plateau before the falloff starts, so the sweep is a lit wall
+    // with a soft edge rather than a small bright dot lost in a long gradient.
+    const pool = smoothstep(float(0.14), float(0.38), d).oneMinus();
+    backdropMat.colorNode = mix(color(0x2b3340), color(0xa8bcd8), pool);
+    // Fades to fully transparent well inside the plane's edges, so the sweep
+    // dissolves into the page background instead of ending on a visible seam.
+    // The canvas is alpha-blended over the page, so this has to be opacity —
+    // matching the page colour here would break the moment the page restyles.
+    backdropMat.opacityNode = pool;
+  }
+  const BACKDROP_Z = -30;
+  const backdrop = new Mesh(backdropGeom, backdropMat);
+  // Y is set by `placeCamera`, from where the view axis actually crosses this
+  // plane. It cannot be a constant tied to the board: the camera looks *down*,
+  // so on a plane this far back the centre of frame sits some 20 units below
+  // the board, and a pool centred near the board's own height lands entirely
+  // above the top of the picture.
+  backdrop.position.set(0, 0, BACKDROP_Z);
+  scene.add(backdrop);
+
   // Catches the contact shadow on an otherwise transparent canvas, so the board
-  // sits on the page rather than floating in front of it.
+  // sits on the page rather than floating in front of it. Drawn over the
+  // backdrop, so the shadow reads against the lit sweep and not just the page.
   const shadowPlane = new Mesh(
-    new PlaneGeometry(60, 60),
-    // Softer than it was: a taller case throws a much larger shadow, and at
-    // the old strength it read as a hard slab beside the board.
-    new ShadowMaterial({ opacity: 0.34, transparent: true }),
+    new PlaneGeometry(120, 120),
+    new ShadowMaterial({ opacity: 0.46, transparent: true }),
   );
   shadowPlane.rotation.x = -Math.PI / 2;
   shadowPlane.position.y = -CASE_H / 2 - 0.01;
@@ -346,10 +460,19 @@ export async function createHeroScene(
   const targetPointer = new Vector2(0, 0);
   const focus = new Vector3(0, 0, 0);
 
-  /** Elevation of the camera above the desk, in radians. A 3/4 product angle. */
-  const ELEVATION = 0.68;
-  /** Breathing room around the board inside the frame. */
-  const PADDING = 1.0;
+  /**
+   * Elevation of the camera above the desk, in radians. A 3/4 product angle,
+   * a little lower than the original 0.68 so the case wall is visibly part of
+   * the subject rather than a sliver under the keys — but not so low that the
+   * key field foreshortens away and the chamfer highlight along the front edge
+   * stops catching, which is what sells the case as milled.
+   */
+  const ELEVATION = 0.62;
+  /**
+   * Breathing room around the board inside the frame. Slightly tighter than 1.0
+   * to buy back the on-screen legend size the thicker case costs.
+   */
+  const PADDING = 0.95;
   /** Largest yaw the pointer and idle drift can reach, combined. */
   const MAX_YAW = 0.3;
 
@@ -387,6 +510,32 @@ export async function createHeroScene(
     );
     camera.lookAt(focus);
     camera.updateProjectionMatrix();
+
+    // Centre the sweep on the frame, not on the board: follow the view axis to
+    // where it crosses the backdrop plane. Biased a little above that so the
+    // brightest part of the pool sits behind the board and the glow reads as
+    // rising behind it rather than as a halo around it.
+    const axisY =
+      camera.position.y +
+      ((BACKDROP_Z - camera.position.z) / (focus.z - camera.position.z)) *
+        (focus.y - camera.position.y);
+    backdrop.position.y = axisY + CASE_H;
+
+    // Size the sweep to the frustum where it actually sits, so its falloff is
+    // measured against what the viewer can see. 2.4x the visible half-extent
+    // puts the pool's outer edge — it reaches zero at 0.38 of the plane — just
+    // inside the frame, so the sweep dissolves before the canvas boundary does.
+    const reach = camera.position.distanceTo(backdrop.position);
+    const halfW = reach * Math.tan(hFov / 2);
+    const halfH = reach * Math.tan(vFov / 2);
+    backdrop.scale.set(
+      halfW * 2.4,
+      // The sweep is vertical and the camera looks down on it, so its height
+      // is foreshortened; undo that or the pool ends up an ellipse lying on
+      // its side rather than the round-ish glow it is in the plane's own space.
+      (halfH * 2.4) / Math.cos(ELEVATION),
+      1,
+    );
   };
 
   let width = canvas.clientWidth || 1;
@@ -452,6 +601,9 @@ export async function createHeroScene(
       caseGeom.dispose();
       for (const geometry of legendGeoms) geometry.dispose();
       for (const material of legendMats) material.dispose();
+      backdropGeom.dispose();
+      backdropMat.dispose();
+      env.dispose();
       atlas.dispose();
       renderer.dispose();
     },

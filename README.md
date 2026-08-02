@@ -49,14 +49,77 @@ so it sits on the page rather than floating.
 
 Its legends come from a canvas atlas, drawn on their own planes above the caps
 rather than textured onto them: `RoundedBoxGeometry` does not give the top face
-clean 0..1 UVs, and the caps are scaled non-uniformly (a 6.25u space bar), which
-would stretch a cap-mapped legend. Separate uniformly-scaled planes keep every
-legend the same size on every key, which is how real keycaps work.
+clean 0..1 UVs, and a cap-mapped legend would stretch along a 6.25u space bar.
+Separate uniformly-scaled planes keep every legend the same size on every key,
+which is how real keycaps work.
+
+The atlas is **mipmapped**, which matters more than its resolution. A legend
+covers roughly 25 screen pixels at hero distance against a 192px cell — about
+8x minification — and point-sampling a linear filter that far down makes thin
+strokes alias in and out between frames. That shimmer, not the size, is what
+made the lettering read as faint. Glyphs are also fitted to their cell by
+`measureText` rather than by a per-length guess at what would fit, which is
+what had been holding the short legends — the alphas and digits, most of the
+board — well below the size they could have been.
+
+### Why the case is not black
+
+`caseMaterial` looks over-engineered for a box, and each value is load-bearing.
+
+The case is lit almost entirely by **reflection**, not by the studio rig. It
+originally used `metalness = 0.86` with nothing in `scene.environment`, and a
+metal has essentially no diffuse response — `diffuse *= (1 - metalness)` — so
+only the faces catching a light's specular lobe showed anything at all. The
+result was a grey lid on a black box, and no amount of extra light fixes it,
+because at that metalness there is barely any diffuse for a light to land on.
+It is a material problem wearing a lighting problem's clothes.
+
+So there is a `studioEnv` — a painted equirectangular gradient rather than an
+imported HDRI or three's `RoomEnvironment` (which is a furnished room, and
+needs `PMREMGenerator`, typed against `WebGLRenderer`). What a product shot
+wants is a softbox above and a dark floor below, so the gradient *is* the
+studio. Its horizon band is the single most important stop in it: a vertical
+wall's normal is horizontal, so the case's sides sample only that band while
+its top face samples the ceiling. The *range* of that gradient is the ratio
+between them.
+
+The heavy `clearcoat` (0.85) is what carries the dark cases. A clearcoat is a
+transparent lacquer, so its reflectance does not depend on the base colour,
+whereas both the diffuse and the metal F0 of Anodized Black (`#1C1C1E`) are
+near zero. On a black case the clearcoat is effectively the only thing putting
+light on a wall that faces away from the key light.
+
+### Backdrop
+
+A pool of light on a sweep behind the board, which is where the depth in the
+shot comes from. Case *height* does not produce depth — it adds a large area of
+uniform colour, which is the opposite of a depth cue. Value separation between
+planes does.
+
+Two things about it are computed in `placeCamera` rather than written as
+constants, both because a constant was wrong:
+
+- **Its size** comes from the frustum at the plane's depth. The pool has to
+  reach zero inside the *canvas*, and the canvas edge is set by the viewport,
+  not by the scene. A plane large enough for one aspect ratio leaves the sweep
+  still bright where the canvas stops, drawing a visible rectangle on the page.
+- **Its height** follows the view axis to where it crosses the plane. The
+  camera looks down, so on a plane that far back the centre of frame sits some
+  20 units *below* the board — a pool centred near the board's own height lands
+  entirely above the top of the picture.
+
+Its falloff ramps outward and is inverted, never `smoothstep(hi, lo, x)`: a
+reversed edge pair is undefined in GLSL, and it showed, clipping the pool to a
+hard rectangle instead of fading.
 
 The **configurator** board stays SVG: a flat spec drawing that does carry the
 legends, morphs between layouts, and is the thing you are actually editing. It
-is sticky, so scrolling the options column never leaves you configuring a
-keyboard you cannot see.
+sits below the options rather than beside them.
+
+It is not sticky, and `position: sticky` cannot make it so from there. Sticky
+only holds an element inside its own containing block, and a trailing element
+has no travel left to hold it against — so keeping the board in view while the
+options scroll means putting it back above them, not adding a sticky rule.
 
 Both are built from the same `buildBoard` matrices, so the 3D board cannot drift
 into showing a keyboard the product does not make.
@@ -169,6 +232,19 @@ asserts the committed value still matches. Changing the palette without running
 `npm run og` fails the build rather than silently shipping a stale preview.
 
 ## Known gaps
+
+- **Anodized Black does not look black in the hero.** The clearcoat that stops
+  the case reading as a grey lid on a black box also lifts `#1C1C1E` to a grey,
+  so the 3D board and the SVG board visibly disagree on that one colourway.
+  This is a deliberate trade: the two settings are mutually exclusive, and a
+  case that reads as one milled block was judged worth more than swatch
+  fidelity on the hero. The other four cases stay clearly distinct from each
+  other. Backing `clearcoat` down toward 0.55 trades back the other way.
+
+- The 3D legends are drawn at weight 700, but `fonts.css` self-hosts IBM Plex
+  Mono only at 400 and 500, so canvas is applying *synthetic* bold rather than a
+  real face. It looks right and costs no bytes, but it depends on the browser
+  emboldening for us. A real 600 via `fetch-fonts.sh` would cost ~15 kB.
 
 - The footer's "Get in touch" address is a placeholder on a fictional domain and
   receives no mail. It is demo copy; the site is a portfolio piece rather than a

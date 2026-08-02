@@ -1,8 +1,20 @@
-import { CanvasTexture, LinearFilter, SRGBColorSpace } from 'three';
+import { CanvasTexture, LinearMipmapLinearFilter, LinearFilter, SRGBColorSpace } from 'three';
 
-const CELL = 128;
+/**
+ * Cell size in the atlas. Generous relative to the ~25 screen pixels a legend
+ * covers at hero camera distance, because the mip chain built from this is what
+ * actually gets sampled: detail here survives two or three levels down.
+ */
+const CELL = 192;
 /** Legend glyphs sit well inside the cell so neighbours cannot bleed in. */
 const INSET = 0.72;
+/**
+ * Heavier than the SVG board's legends. At hero distance a 500 weight puts too
+ * few lit pixels into each stroke and the lettering reads as grey haze rather
+ * than as characters.
+ */
+const WEIGHT = 700;
+const FONT_STACK = `'IBM Plex Mono', ui-monospace, monospace`;
 
 export interface LegendAtlas {
   texture: CanvasTexture;
@@ -38,13 +50,24 @@ export function buildLegendAtlas(labels: string[]): LegendAtlas {
 
   const cell = new Map<string, [number, number]>();
 
+  // The budget a glyph may occupy, on both axes.
+  const box = CELL * INSET;
+
   unique.forEach((label, i) => {
     const cx = i % cols;
     const cy = Math.floor(i / cols);
 
-    // Long legends (PGUP, BKSP) have to come down in size or they clip.
-    const size = CELL * INSET * (label.length > 2 ? 0.42 : label.length > 1 ? 0.58 : 0.78);
-    ctx.font = `500 ${size}px 'IBM Plex Mono', ui-monospace, monospace`;
+    // Fit to the box by measurement rather than by a per-length guess. The old
+    // fixed multipliers (0.78 / 0.58 / 0.42 of the box) were sized for the
+    // worst case at each length, which left every short legend — the alphas and
+    // digits, most of the board — rendering far smaller than it could.
+    // Only width ever binds here: the font stack is monospaced, so advance
+    // width grows with the label while cap height does not.
+    ctx.font = `${WEIGHT} ${box}px ${FONT_STACK}`;
+    const width = ctx.measureText(label).width;
+    const size = width > box ? box * (box / width) : box;
+
+    ctx.font = `${WEIGHT} ${size}px ${FONT_STACK}`;
     ctx.fillText(label, cx * CELL + CELL / 2, cy * CELL + CELL / 2);
 
     // Canvas y runs down, UV runs up.
@@ -53,9 +76,17 @@ export function buildLegendAtlas(labels: string[]): LegendAtlas {
 
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
-  texture.minFilter = LinearFilter;
+  // Mipmapped, which the atlas previously was not. A legend covers roughly 25
+  // screen pixels at hero distance against a 192px cell — about 8x minification.
+  // Point-sampling a linear filter that far down makes thin strokes alias in and
+  // out between frames, which is most of why the lettering read as faint rather
+  // than small. The mip chain resolves the stroke instead of gambling on it.
+  texture.generateMipmaps = true;
+  texture.minFilter = LinearMipmapLinearFilter;
   texture.magFilter = LinearFilter;
-  texture.anisotropy = 4;
+  // The legends sit on caps raked away from the camera by the row tilt, so the
+  // sampling footprint is markedly anisotropic.
+  texture.anisotropy = 8;
   texture.needsUpdate = true;
 
   return {
