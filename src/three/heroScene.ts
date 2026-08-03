@@ -89,9 +89,20 @@ const BEZEL = 0.3;
  */
 const CHAMFER = 0.08;
 
-/** Thickness of the grey slab, and how far it oversails the case on each side. */
-const SURFACE_H = 0.5;
-const SURFACE_MARGIN = 1.35;
+/**
+ * The grey surface: 1mm thick, and far wider than the shot.
+ *
+ * One scene unit is the 19.05mm keycap pitch, so 0.0525 is a millimetre — thin
+ * enough that its edge is a hairline and it reads as a backdrop rather than a
+ * plinth. It still turns with the board, which is the point: a background that
+ * moves with the product instead of sitting behind it.
+ *
+ * The margin runs it well past the frame on every side, so at rest there is no
+ * edge to see. That is also why the camera must *not* frame it — fitting a
+ * 57-unit slab would push the camera back until the keyboard was a speck.
+ */
+const SURFACE_H = 0.0525;
+const SURFACE_MARGIN = 20;
 
 
 export interface HeroScene {
@@ -431,7 +442,10 @@ export async function createHeroScene(
   // ortho box the map clamps to its edge texel — which still holds an occluder,
   // so everything beyond smears into one hard rectangle of false shadow across
   // the table. Sized for the shadow, not for the caster.
-  const shadowExtent = Math.max(caseW, caseD) * 1.7 + SURFACE_MARGIN * 2;
+// Sized for the board's shadow, not for the surface it lands on. The surface
+  // runs far past the frame, and stretching the map to cover it would spend the
+  // whole shadow resolution on empty grey.
+  const shadowExtent = Math.max(caseW, caseD) * 1.7;
   key.shadow.camera.left = -shadowExtent;
   key.shadow.camera.right = shadowExtent;
   key.shadow.camera.top = shadowExtent;
@@ -552,7 +566,8 @@ export async function createHeroScene(
     SURFACE_H,
     caseD + SURFACE_MARGIN * 2,
     3,
-    0.06,
+    // Under half the thickness, or the rounding eats the sheet.
+    0.015,
   );
   const surface = new Mesh(surfaceGeom, surfaceMat);
   // Top face flush under the case, so the board stands on it rather than
@@ -635,13 +650,10 @@ export async function createHeroScene(
   const distanceForYaw = (yaw: number) => {
     const c = Math.abs(Math.cos(yaw));
     const s = Math.abs(Math.sin(yaw));
-    // The slab is the subject, not the case: it oversails the board on every
-    // side and turns with it, so framing the case alone lets its corners swing
-    // out of shot on exactly the drag that shows it off.
-    const subjectW = caseW + SURFACE_MARGIN * 2;
-    const subjectD = caseD + SURFACE_MARGIN * 2;
-    const yawedW = subjectW * c + subjectD * s;
-    const yawedD = subjectD * c + subjectW * s;
+    // Frames the case, not the surface. The surface is deliberately larger than
+    // the shot — it is a backdrop — so fitting it would defeat its own purpose.
+    const yawedW = caseW * c + caseD * s;
+    const yawedD = caseD * c + caseW * s;
     const projectedH =
       yawedD * Math.cos(ELEVATION) +
       (CASE_H + CAP_H + SURFACE_H) * Math.sin(ELEVATION);
