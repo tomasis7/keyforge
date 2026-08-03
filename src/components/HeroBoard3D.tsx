@@ -121,11 +121,23 @@ export function HeroBoard3D({ layout, caseOption, colorway, children }: Props) {
     if (!canvas) return;
 
     let last: { x: number; y: number } | null = null;
+    /** Where and when the gesture started, to tell a click from a drag. */
+    let origin: { x: number; y: number; t: number } | null = null;
+
+    /** Canvas-relative normalised device coords, which is what the ray wants. */
+    const ndc = (event: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        y: -(((event.clientY - rect.top) / rect.height) * 2 - 1),
+      };
+    };
 
     const onDown = (event: PointerEvent) => {
       // Only the primary button; a right-click drag is a context menu.
       if (event.button !== 0) return;
       last = { x: event.clientX, y: event.clientY };
+      origin = { x: event.clientX, y: event.clientY, t: performance.now() };
       // Capture, so a fast drag that leaves the canvas keeps turning the board
       // instead of stopping dead at the edge and stranding the cursor mid-grab.
       canvas.setPointerCapture(event.pointerId);
@@ -134,7 +146,13 @@ export function HeroBoard3D({ layout, caseOption, colorway, children }: Props) {
     };
 
     const onDrag = (event: PointerEvent) => {
-      if (!last) return;
+      // Highlight whatever is under the cursor whenever we are not turning the
+      // board. During a drag the pointer is travelling far and fast, and lighting
+      // up every key it crosses reads as noise rather than as a hover.
+      if (!last) {
+        sceneRef.current?.hoverAt(ndc(event));
+        return;
+      }
       // Pixels to radians. Yaw is looser than pitch because there is far more
       // of the board to travel horizontally, and pitch hits its clamp quickly.
       sceneRef.current?.rotateBy(
@@ -147,6 +165,17 @@ export function HeroBoard3D({ layout, caseOption, colorway, children }: Props) {
     const onUp = (event: PointerEvent) => {
       if (!last) return;
       last = null;
+      // A click and a drag are the same gesture on the same surface, so the
+      // only thing separating them is how far and how long it went. Under both
+      // thresholds it was meant as a press; over either, the viewer was turning
+      // the board and no key should fire.
+      if (origin) {
+        const moved = Math.hypot(event.clientX - origin.x, event.clientY - origin.y);
+        if (moved < 5 && performance.now() - origin.t < 400) {
+          sceneRef.current?.clickAt(ndc(event));
+        }
+        origin = null;
+      }
       if (canvas.hasPointerCapture(event.pointerId)) {
         canvas.releasePointerCapture(event.pointerId);
       }
@@ -154,8 +183,11 @@ export function HeroBoard3D({ layout, caseOption, colorway, children }: Props) {
       sceneRef.current?.setDragging(false);
     };
 
+    const onLeave = () => sceneRef.current?.hoverAt(null);
+
     canvas.addEventListener('pointerdown', onDown);
     canvas.addEventListener('pointermove', onDrag);
+    canvas.addEventListener('pointerleave', onLeave);
     canvas.addEventListener('pointerup', onUp);
     // A cancelled pointer (system gesture, focus loss) never fires pointerup,
     // and without this the board would stay stuck in the dragging branch.
@@ -163,6 +195,7 @@ export function HeroBoard3D({ layout, caseOption, colorway, children }: Props) {
     return () => {
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onDrag);
+      canvas.removeEventListener('pointerleave', onLeave);
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onUp);
     };

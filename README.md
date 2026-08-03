@@ -125,6 +125,31 @@ toward white. On an 18mm case the bezel is most of the case you can see, which
 made Anodized Black render as silver. Measured, that one ramp was worth ~82 of
 the bezel's 146 luminance: more than the environment and every light combined.
 
+### Pressing keys
+
+Hovering the hero board highlights the key under the cursor and pulses it;
+clicking presses it down and springs it back. `keyInteraction.ts` owns the
+state, `heroScene` wires it, `HeroBoard3D` maps the pointer.
+
+Three things about it are less obvious than they look.
+
+**State is keyed by board key, not by instance.** A key exists as an instance in
+two meshes — its cap and its legend — and those do not share an instance order,
+because legend meshes skip keys with no label. Anything keyed by instance drifts
+between them, and a pressed cap leaves its lettering hanging in the air.
+
+**Cap geometries are cached per zone as well as per size.** Instance attributes
+live on the *geometry*, so two buckets sharing one would share their per-key
+state: an alpha would light up whenever the modifier of the same size did.
+
+**Press displaces along different axes in the two meshes.** A cap's local +Y is
+up; a legend plane's local +Z is, because it is rotated `-PI/2` about X to lie
+on the cap. Caps offset −Y, legends −Z.
+
+A click and a drag are the same gesture on the same surface, so the only thing
+separating them is how far and how long it went: under 5px and 400ms it is a
+press, over either it was a rotate and no key fires.
+
 ### The surface is an object, not a background
 
 The board stands on a grey slab that is parented to `root`, so it turns with

@@ -13,6 +13,7 @@ import type { BufferGeometry } from 'three';
 import {
   Color,
   DirectionalLight,
+  Raycaster,
   InstancedBufferAttribute,
   Group,
   HemisphereLight,
@@ -27,7 +28,8 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { studioEnvironment } from './studioEnv';
-import { attribute, color, float, min, mix, positionLocal, screenUV, smoothstep, texture, uv, vec2 } from 'three/tsl';
+import { createKeyInteraction, PRESS_TRAVEL } from './keyInteraction';
+import { attribute, color, float, min, mix, positionLocal, screenUV, smoothstep, texture, uv, vec2, vec3 } from 'three/tsl';
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, WebGPURenderer } from 'three/webgpu';
 import type { LayoutId } from '../data/layouts';
 import type { CaseOption, ColorwayOption } from '../data/options';
@@ -112,6 +114,10 @@ export interface HeroScene {
   rotateBy: (yaw: number, pitch: number) => void;
   /** While dragging, the hover-follow and idle drift stand down. */
   setDragging: (dragging: boolean) => void;
+  /** Highlights the key under canvas-relative NDC, or clears it with null. */
+  hoverAt: (ndc: { x: number; y: number } | null) => void;
+  /** Presses the key under canvas-relative NDC. */
+  clickAt: (ndc: { x: number; y: number }) => void;
   setColors: (caseOption: CaseOption, colorway: ColorwayOption) => void;
   /** Stops the render loop when the board is off-screen. */
   setActive: (active: boolean) => void;
@@ -203,14 +209,56 @@ function capColor(face: Color) {
  * the key light and read as separate objects against the case rather than a
  * flat grid of colour.
  */
-function capMaterial(hex: string): MeshPhysicalNodeMaterial {
+function capMaterial(hex: string, accent: string): MeshPhysicalNodeMaterial {
   const material = new MeshPhysicalNodeMaterial();
   material.metalness = 0;
   material.roughness = 0.78;
   material.sheen = 0.3;
 
-  material.colorNode = capColor(new Color(hex));
+  material.colorNode = capNodeColor(hex, accent);
+  material.positionNode = pressedPosition();
   return material;
+}
+
+/**
+ * Per-instance key state, 0..1 each. See `keyInteraction`.
+ *
+ * `attribute()` is declared as returning `AttributeNode<string>`, which carries
+ * no arithmetic methods, so the node cannot be multiplied without an assertion.
+ * At runtime it is an ordinary float node — the existing `aLegend` attribute
+ * only avoids this because it is passed straight into `.add()` and never
+ * operated on itself. Asserted once here rather than at each use.
+ */
+type FloatNode = ReturnType<typeof float>;
+const keyAttr = (name: string) => attribute(name, 'float') as unknown as FloatNode;
+const pressAmount = () => keyAttr('aPress');
+const glowAmount = () => keyAttr('aGlow');
+
+/**
+ * Pushes a pressed cap down its own axis.
+ *
+ * Local -Y, not world down: the instance matrix already carries each row's
+ * tilt, so displacing in local space travels along the key's own stem the way a
+ * switch does, rather than sinking the cap through a tilted cap's shoulder.
+ */
+function pressedPosition() {
+  return positionLocal.sub(vec3(0, pressAmount().mul(float(PRESS_TRAVEL)), 0));
+}
+
+/**
+ * Cap colour, lifted toward a highlight while hovered and harder while struck.
+ *
+ * The highlight is the colourway's accent pulled a third of the way to white,
+ * not the accent itself. Two reasons: the accent alone is dark enough on some
+ * colourways to be invisible against an already-dark alpha, and on the accent
+ * *zone* it would be the cap's own colour, so those keys would light up by
+ * turning into themselves. Brightening guarantees every key visibly moves.
+ */
+function capNodeColor(hex: string, accentHex: string) {
+  const base = capColor(new Color(hex));
+  const highlight = color(new Color(accentHex).lerp(new Color(0xffffff), 0.34));
+  const lit = mix(base, highlight, glowAmount().mul(0.6));
+  return mix(lit, highlight, pressAmount().mul(0.85));
 }
 
 export async function createHeroScene(
@@ -284,13 +332,22 @@ export async function createHeroScene(
   // radii and shoulder angles with the key, which is what made the spacebar
   // and enter cap read as lozenges rather than long keycaps.
   const zones: Zone[] = ['alpha', 'mod', 'accent'];
+  // Index of each key within `board.keys`, so cap and legend buckets can share
+  // one piece of state per key despite holding different instance orders.
+  const keyIndex = new Map<(typeof board.keys)[number], number>();
+  board.keys.forEach((k, i) => keyIndex.set(k, i));
+  const interaction = createKeyInteraction(board.keys.length);
+  const raycaster = new Raycaster();
   const capGeoms = new Map<string, BufferGeometry>();
   const capMaterials = new Map<Zone, MeshPhysicalNodeMaterial>();
   const dummy = new Object3D();
 
   const sizeKey = (w: number, d: number) => `${w.toFixed(3)}x${d.toFixed(3)}`;
-  const capGeometryFor = (w: number, d: number): BufferGeometry => {
-    const id = sizeKey(w, d);
+  // Keyed by zone as well as size. Instance attributes live on the *geometry*,
+  // so two buckets sharing one would share their per-key press and glow — an
+  // alpha would light up whenever the modifier of the same size did.
+  const capGeometryFor = (zone: Zone, w: number, d: number): BufferGeometry => {
+    const id = `${zone}|${sizeKey(w, d)}`;
     let geometry = capGeoms.get(id);
     if (!geometry) {
       geometry = keycapGeometry(w, d, CAP_H);
@@ -300,7 +357,7 @@ export async function createHeroScene(
   };
 
   for (const zone of zones) {
-    const material = capMaterial(colorway[zone]);
+    const material = capMaterial(colorway[zone], colorway.accent);
     capMaterials.set(zone, material);
 
     // One instanced mesh per (zone, size) pair — a handful of extra draw calls
@@ -315,7 +372,7 @@ export async function createHeroScene(
     }
 
     for (const keys of bySize.values()) {
-      const geometry = capGeometryFor(keys[0].bw * S, keys[0].bh * S);
+      const geometry = capGeometryFor(zone, keys[0].bw * S, keys[0].bh * S);
       const mesh = new InstancedMesh(geometry, material, keys.length);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -336,6 +393,7 @@ export async function createHeroScene(
       });
       dummy.rotation.set(0, 0, 0);
       mesh.instanceMatrix.needsUpdate = true;
+      interaction.register(mesh, keys.map((k) => keyIndex.get(k)!), true);
       root.add(mesh);
     }
   }
@@ -374,6 +432,13 @@ export async function createHeroScene(
     );
     material.colorNode = color(new Color(colorway[LEGEND_KEY[zone]]));
     material.opacityNode = sampled.a;
+    // Local -Z, not -Y. The plane is rotated -PI/2 about X to lie on the cap,
+    // which maps its local +Z to world up — so pressing it down the cap's stem
+    // means displacing along Z here, where the caps use Y. Without this the cap
+    // sinks and leaves its lettering hanging in the air above it.
+    material.positionNode = positionLocal.sub(
+      vec3(0, 0, pressAmount().mul(float(PRESS_TRAVEL))),
+    );
     legendMats.push(material);
 
     const mesh = new InstancedMesh(geometry, material, keys.length);
@@ -407,6 +472,9 @@ export async function createHeroScene(
     });
     dummy.rotation.set(0, 0, 0);
     mesh.instanceMatrix.needsUpdate = true;
+    // Not pickable: the ray should hit the cap under the legend, not the little
+    // transparent quad floating above it.
+    interaction.register(mesh, keys.map((k) => keyIndex.get(k)!), false);
     root.add(mesh);
   }
 
@@ -772,6 +840,8 @@ export async function createHeroScene(
     }
 
 
+    interaction.update(clock.t / 0.0045 / 60, reducedMotion);
+
     // Refit for however the board is currently turned. Cheap — a handful of
     // trig — and it is what lets the resting pose be framed tightly while a
     // dragged-to-45-degrees pose still fits.
@@ -795,6 +865,19 @@ export async function createHeroScene(
       spin += yaw;
       tilt = Math.min(TILT_MAX, Math.max(TILT_MIN, tilt + pitch));
     },
+    hoverAt(ndc) {
+      if (!ndc) {
+        interaction.setHover(null);
+        return;
+      }
+      raycaster.setFromCamera(ndc as never, camera);
+      interaction.setHover(interaction.pick(raycaster));
+    },
+    clickAt(ndc) {
+      raycaster.setFromCamera(ndc as never, camera);
+      const key = interaction.pick(raycaster);
+      if (key !== null) interaction.press(key);
+    },
     setDragging(next) {
       dragging = next;
       if (!next) {
@@ -813,8 +896,11 @@ export async function createHeroScene(
       for (const zone of zones) {
         const material = capMaterials.get(zone);
         if (!material) continue;
-        const face = new Color(nextColorway[zone]);
-        material.colorNode = capColor(face);
+        // The same node the material was built with, not the bare `capColor`.
+        // Reassigning the plain version here silently dropped the hover and
+        // press terms — and because this runs once on mount, it dropped them
+        // before anyone could ever see them work.
+        material.colorNode = capNodeColor(nextColorway[zone], nextColorway.accent);
         material.needsUpdate = true;
       }
     },
@@ -830,6 +916,7 @@ export async function createHeroScene(
       surfaceGeom.dispose();
       surfaceMat.dispose();
       env.dispose();
+      interaction.dispose();
       atlas.dispose();
       renderer.dispose();
     },
